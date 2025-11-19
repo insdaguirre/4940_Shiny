@@ -14,8 +14,8 @@ An AI-powered recycling assistant that helps users identify recyclable items and
 
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
 - **Backend**: Node.js + Express + TypeScript
-- **AI Services**: OpenAI Vision API + OpenAI Assistants API (with web search)
-- **Maps**: Mapbox GL JS + React Map GL
+- **AI Services**: OpenAI Vision API (GPT-4o) + OpenAI Responses API (GPT-4o with web search)
+- **Maps**: Mapbox GL JS + React Map GL + Mapbox Geocoding API
 
 ## Prerequisites
 
@@ -78,24 +78,141 @@ Navigate to `http://localhost:5173` to use the application.
 
 ### Railway Deployment
 
-RecycLens is configured for easy deployment on Railway. See [RAILWAY_DEPLOY.md](./RAILWAY_DEPLOY.md) for detailed deployment instructions.
+RecycLens is configured for easy deployment on Railway.
 
 **Quick Steps:**
 1. Connect your GitHub repository to Railway
 2. Add environment variables:
-   - `OPENAI_API_KEY`
-   - `VITE_MAPBOX_ACCESS_TOKEN`
-   - `NODE_ENV=production`
-3. Railway will automatically build and deploy
+   - `OPENAI_API_KEY` - Your OpenAI API key
+   - `VITE_MAPBOX_ACCESS_TOKEN` - Your Mapbox access token
+   - `NODE_ENV=production` - Set to production mode
+3. Railway will automatically build and deploy using the `railway.json` configuration
 
 The application will be available at a Railway-provided URL (e.g., `https://your-app.railway.app`).
 
+**Note:** Railway automatically sets the `PORT` environment variable, so you don't need to configure it manually.
+
 ## How It Works
 
-1. **User uploads an image** of an item they want to recycle
-2. **Vision API analyzes** the image to identify materials and condition
-3. **GPT-5 Assistant** (with web search) determines recyclability and finds local facilities
-4. **Results are displayed** with instructions and facility information
+### System Architecture & Information Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         User Interface                           │
+│  (React + Vite + Tailwind CSS)                                  │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │   Location   │  │    Image     │  │   Context    │         │
+│  │   Input      │  │   Upload     │  │   (Optional) │         │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘         │
+│         │                  │                  │                  │
+│         └──────────────────┴──────────────────┘                 │
+│                            │                                    │
+│                            ▼                                    │
+│                   POST /api/analyze                             │
+└────────────────────────────┼────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Express Backend Server                       │
+│                    (Node.js + TypeScript)                      │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              POST /api/analyze Handler                   │  │
+│  │  (server/routes/analyze.ts)                                │  │
+│  └──────────────┬───────────────────────────────────────────┘  │
+│                 │                                                │
+│                 ├──────────────────┐                              │
+│                 │                  │                              │
+│                 ▼                  ▼                            │
+│  ┌──────────────────────┐  ┌──────────────────────┐           │
+│  │  Vision Service      │  │  Responses Service    │           │
+│  │  (visionService.ts)  │  │  (gpt5Service.ts)    │           │
+│  └──────────┬───────────┘  └──────────┬───────────┘           │
+└──────────────┼────────────────────────┼──────────────────────────┘
+               │                        │
+               ▼                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    OpenAI API Services                          │
+│                                                                  │
+│  ┌──────────────────────────┐  ┌──────────────────────────┐   │
+│  │   GPT-4o Vision API     │  │  GPT-4o Responses API    │   │
+│  │                          │  │  (with web_search tool)   │   │
+│  │  • Image Analysis        │  │                          │   │
+│  │  • Material ID          │  │  • Recyclability Decision │   │
+│  │  • Condition Assessment  │  │  • Disposal Instructions │   │
+│  │  • Contaminant Detection│  │  • Facility Lookup        │   │
+│  │                          │  │    (via web search)       │   │
+│  └──────────┬───────────────┘  └──────────┬───────────────┘   │
+│             │                              │                    │
+│             │                              │                    │
+│             │         ┌───────────────────┘                    │
+│             │         │                                         │
+│             │         ▼                                         │
+│             │  ┌──────────────────────┐                        │
+│             │  │   Web Search Tool    │                        │
+│             │  │  (OpenAI Responses)  │                        │
+│             │  │  • Find facilities  │                        │
+│             │  │  • Local regulations│                        │
+│             │  └──────────────────────┘                        │
+│             │                                                   │
+└─────────────┼───────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Response Processing                         │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Combine Vision + Responses API Results                 │  │
+│  │  • isRecyclable (boolean)                                 │  │
+│  │  • category, bin, confidence                              │  │
+│  │  • step-by-step instructions                              │  │
+│  │  • facilities[] (name, address, type, url, notes)         │  │
+│  └──────────┬───────────────────────────────────────────────┘  │
+└─────────────┼───────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend Display                            │
+│                                                                  │
+│  ┌──────────────────┐  ┌──────────────────┐                   │
+│  │  Results Panel  │  │  Facility Map    │                   │
+│  │  • Recyclability │  │  (Mapbox GL)     │                   │
+│  │  • Instructions │  │  • Markers       │                   │
+│  │  • Reasoning    │  │  • Geocoding     │                   │
+│  └──────────────────┘  └──────────────────┘                   │
+│                                                                  │
+│  ┌──────────────────┐                                          │
+│  │  Facility Cards  │                                          │
+│  │  • Name, Address │                                          │
+│  │  • Type, Notes   │                                          │
+│  │  • External Link │                                          │
+│  └──────────────────┘                                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Process Flow
+
+1. **User Input**: User uploads an image, enters location, and optionally adds context
+2. **Image Analysis**: Vision API (GPT-4o) analyzes the image to identify:
+   - Primary and secondary materials
+   - Item condition (clean, soiled, damaged, etc.)
+   - Contaminants (food residue, grease, etc.)
+   - Material category
+3. **Recyclability Assessment**: GPT-4o Responses API receives:
+   - Vision analysis results
+   - User location
+   - Optional user context
+   - Uses web search tool to:
+     - Determine recyclability based on local regulations
+     - Find nearby recycling/disposal facilities
+     - Generate step-by-step disposal instructions
+4. **Geocoding**: Mapbox Geocoding API converts facility addresses to coordinates
+5. **Results Display**: Frontend displays:
+   - Recyclability decision with confidence score
+   - Disposal instructions
+   - Interactive map with facility markers
+   - Facility cards with details and links
 
 ## API Endpoints
 
@@ -161,7 +278,7 @@ RecycLens/
 │   │   └── analyze.ts     # Main analysis endpoint
 │   ├── services/          # Business logic
 │   │   ├── visionService.ts    # Vision API integration
-│   │   └── gpt5Service.ts      # Assistants API integration
+│   │   └── gpt5Service.ts      # Responses API integration
 │   └── types.ts           # Backend types
 ├── src/                    # Frontend React app
 │   ├── components/        # React components
@@ -198,8 +315,9 @@ RecycLens/
 ### API errors
 
 - Verify your OpenAI API key is valid and has credits
-- Check that you have access to Vision API and Assistants API
+- Check that you have access to Vision API (GPT-4o) and Responses API (GPT-4o with web search)
 - Review server logs for detailed error messages
+- Ensure your OpenAI account has access to the web search tool
 
 ### Image upload issues
 
@@ -217,10 +335,18 @@ RecycLens/
 
 ## Development Notes
 
-- The backend uses OpenAI Assistants API with web search tool for facility lookup
-- Vision API analyzes images to identify materials
-- Frontend uses Vite proxy to route `/api/*` requests to Express backend
-- Both servers must be running simultaneously for the app to work
+- **Backend Architecture**: Express server serves both API routes and static frontend files in production
+- **AI Integration**: 
+  - Vision API (GPT-4o) handles image analysis for material identification
+  - Responses API (GPT-4o) with `web_search` tool handles recyclability decisions and facility lookup
+- **Frontend**: 
+  - Development: Vite dev server with proxy to backend
+  - Production: Built static files served by Express
+- **Maps**: Mapbox GL JS for interactive maps, Mapbox Geocoding API for address-to-coordinates conversion
+- **Environment Variables**: 
+  - `OPENAI_API_KEY`: Required for both Vision and Responses API
+  - `VITE_MAPBOX_ACCESS_TOKEN`: Required for map display (note the `VITE_` prefix for frontend access)
+  - `PORT`: Automatically set by Railway in production
 
 ## License
 
