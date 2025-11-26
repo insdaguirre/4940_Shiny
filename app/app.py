@@ -169,11 +169,9 @@ def input_form():
             
             # CTA Button
             ui.div(
-                ui.div(
-                    ui.input_action_button(
-                        "check_button",
-                        "Check if it's Recyclable"
-                    ),
+                ui.input_action_button(
+                    "check_button",
+                    "Check if it's Recyclable",
                     class_="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-full font-medium hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 ),
                 class_="mb-6"
