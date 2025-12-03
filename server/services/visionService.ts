@@ -14,15 +14,16 @@ function getOpenAIClient() {
  * Analyzes an image to identify materials and recycling-relevant conditions
  */
 export async function analyzeImage(imageBase64: string): Promise<VisionResponse> {
-  // Remove data URL prefix if present
-  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+  // Keep data URL prefix for chat completions API
+  const imageDataUrl = imageBase64.startsWith('data:') 
+    ? imageBase64 
+    : `data:image/jpeg;base64,${imageBase64}`;
 
   try {
     const openai = getOpenAIClient();
     
-    // Prepare input for Responses API
-    // Include image as data URL in the input string
-    const input = `You are an expert recycling and materials classifier specializing in identifying batteries, electronics, and hazardous materials.
+    // Prepare system message
+    const systemMessage = `You are an expert recycling and materials classifier specializing in identifying batteries, electronics, and hazardous materials.
 
 CRITICAL FIRST STEP - Check for Batteries and Electronics:
 
@@ -99,22 +100,45 @@ Output format:
 
 - No extra text, no markdown, no comments.
 
-Now analyze this image and return the material analysis as JSON:
+Now analyze this image and return the material analysis as JSON:`;
 
-[Image: data:image/jpeg;base64,${base64Data}]`;
-
-    const response = await openai.responses.create({
-      model: 'gpt-5.1',
-      input: input,
+    // Use Chat Completions API with vision support (matching OpenAI's official format)
+    const response = await openai.chat.completions.create({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: systemMessage
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this image for recycling materials and return the JSON analysis.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageDataUrl
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.2
     });
 
-    const outputText = response.output_text || '';
-    if (!outputText) {
+    // Extract response content
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
       throw new Error('No response from vision API');
     }
 
-    // Parse JSON response
-    const parsed = JSON.parse(outputText);
+    // Parse JSON response (handle markdown code blocks if present)
+    const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(cleanedContent);
     
     // Validate and return structured response
     return {
