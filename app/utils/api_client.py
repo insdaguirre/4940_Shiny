@@ -24,25 +24,16 @@ async def analyze_vision(image_base64: str) -> Dict[str, Any]:
     """
     url = f"{BACKEND_URL}/api/analyze/vision"
     
-    # Use separate connect and read timeouts for long-running operations
-    timeout = httpx.Timeout(connect=60.0, read=180.0)
-    
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                url,
-                json={"image": image_base64},
-                headers={"Content-Type": "application/json"}
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("result", {})
-    except httpx.ConnectTimeout as e:
-        raise Exception(f"Connection timeout: Could not connect to backend service. Please check if the backend is running.") from e
-    except httpx.ReadTimeout as e:
-        raise Exception(f"Request timeout: The vision analysis took too long. Please try again.") from e
-    except httpx.HTTPError as e:
-        raise Exception(f"HTTP error during vision analysis: {str(e)}") from e
+    # Use a longer timeout for long-running operations (increased from 120 to 180)
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        response = await client.post(
+            url,
+            json={"image": image_base64},
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("result", {})
 
 
 async def analyze_recyclability(
@@ -66,27 +57,18 @@ async def analyze_recyclability(
     """
     url = f"{BACKEND_URL}/api/analyze/recyclability"
     
-    # Use separate connect and read timeouts for long-running operations
-    timeout = httpx.Timeout(connect=60.0, read=180.0)
-    
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                url,
-                json={
-                    "visionResult": vision_result,
-                    "location": location,
-                    "context": context
-                },
-                headers={"Content-Type": "application/json"}
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("result", {})
-    except httpx.ConnectTimeout as e:
-        raise Exception(f"Connection timeout: Could not connect to backend service. Please check if the backend is running.") from e
-    except httpx.ReadTimeout as e:
-        raise Exception(f"Request timeout: The recyclability analysis took too long. Please try again.") from e
-    except httpx.HTTPError as e:
-        raise Exception(f"HTTP error during recyclability analysis: {str(e)}") from e
+    # Use a longer timeout for long-running operations (increased from 120 to 180)
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        response = await client.post(
+            url,
+            json={
+                "visionResult": vision_result,
+                "location": location,
+                "context": context
+            },
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("result", {})
 
