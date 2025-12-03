@@ -20,7 +20,8 @@ MAPBOX_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 
 # Analysis stages
 STAGE_IDLE = "idle"
-STAGE_ANALYZING_IMAGE = "analyzing-image"
+STAGE_ANALYZING_VISION = "analyzing-vision"
+STAGE_QUERYING_RAG = "querying-rag"
 STAGE_ANALYZING_RECYCLABILITY = "analyzing-recyclability"
 STAGE_GEOCODING = "geocoding-facilities"
 STAGE_COMPLETE = "complete"
@@ -546,16 +547,24 @@ def server(input, output, session):
         """Display progress indicator while analysis is in progress."""
         stage = analysis_stage.get()
         
-        # Show "Analyzing..." for any active analysis stage
         # Hide when idle, complete, or error
         if stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR:
             return None
         
-        # Show single "Analyzing..." message for all analysis stages
+        # Map stages to user-friendly messages
+        stage_messages = {
+            STAGE_ANALYZING_VISION: "Analyzing image...",
+            STAGE_QUERYING_RAG: "Querying local regulations...",
+            STAGE_ANALYZING_RECYCLABILITY: "Determining recyclability and searching for facilities...",
+            STAGE_GEOCODING: "Finding recycling locations...",
+        }
+        
+        message = stage_messages.get(stage, "Processing...")
+        
         return ui.div(
             ui.div(
                 ui.span("⏳", class_="animate-spin"),
-                ui.span("Analyzing...", class_="ml-2"),
+                ui.span(message, class_="ml-2"),
                 class_="flex items-center text-green-600"
             ),
             class_="mb-6"
@@ -585,22 +594,27 @@ def server(input, output, session):
             return
         
         # Only set analyzing stage AFTER validation passes
-        analysis_stage.set(STAGE_ANALYZING_IMAGE)
+        analysis_stage.set(STAGE_ANALYZING_VISION)
         
         try:
-            # Stage 1: Analyze image
+            # Stage 1: Analyze image (Vision API)
             image_base64 = convert_image_to_base64(file_info[0])
             vision_res = await analyze_vision(image_base64)
             vision_result.set(vision_res)
             
-            # Stage 2: Analyze recyclability
-            analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
+            # Stage 2: Query RAG (happens inside recyclability, but we indicate it)
+            # Note: RAG query happens inside the recyclability endpoint, but we show this stage
+            # to give users feedback that local regulations are being queried
+            analysis_stage.set(STAGE_QUERYING_RAG)
             await asyncio.sleep(0.1)
+            
+            # Stage 3: Analyze recyclability (includes RAG query and web search)
+            analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
             context = input.context() or ""
             analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
             analysis_result.set(analysis_res)
             
-            # Stage 3: Geocoding (happens in frontend)
+            # Stage 4: Geocoding (happens in frontend)
             analysis_stage.set(STAGE_GEOCODING)
             await asyncio.sleep(0.5)
             
@@ -609,7 +623,12 @@ def server(input, output, session):
             show_results.set(True)
         except Exception as e:
             analysis_stage.set(STAGE_ERROR)
-            error_message.set(f"Analysis failed: {str(e)}")
+            # Provide more user-friendly error messages
+            error_msg = str(e)
+            if "timeout" in error_msg.lower() or "Connection timeout" in error_msg:
+                error_message.set(f"Request timed out. The analysis is taking longer than expected. Please try again.")
+            else:
+                error_message.set(f"Analysis failed: {error_msg}")
             print(f"Analysis error: {e}")
             import traceback
             traceback.print_exc()
