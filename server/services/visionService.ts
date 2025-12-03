@@ -22,82 +22,79 @@ export async function analyzeImage(imageBase64: string): Promise<VisionResponse>
     
     // Prepare input for Responses API
     // Include image as data URL in the input string
-    const input = `You are an expert recycling and materials classifier.
+    const input = `You are an expert recycling and materials classifier specializing in identifying batteries, electronics, and hazardous materials.
+
+CRITICAL FIRST STEP - Check for Batteries and Electronics:
+
+Before identifying any other material, you MUST check if this is a battery or electronic device. Look for:
+
+- **Battery indicators**: Voltage markings (e.g., "3.7V", "1.5V", "9V"), capacity labels (e.g., "mAh", "Ah"), battery type labels (lithium, alkaline, lead-acid, etc.)
+- **Battery terminals**: Metal contacts, positive/negative terminals, connectors
+- **Wires attached**: If you see wires connected to a battery-like object, it's a battery
+- **Battery shape**: Rectangular, cylindrical, or pouch-shaped objects with voltage/capacity labels
+- **Electronic components**: Circuit boards, chips, electronic connectors
+
+**IF YOU SEE ANY BATTERY INDICATORS, the primaryMaterial MUST be "Battery", "Lithium Battery", "Alkaline Battery", or similar battery type. Do NOT identify it as cardboard, plastic, or any other material.**
 
 Task:
 
 You will be given a single image. Your job is to:
 
-1. Identify the main physical item(s) in the image (e.g., "plastic water bottle", "aluminum soda can", "cardboard shipping box").
+1. **FIRST**: Check if this is a battery or electronic device. If battery indicators are present, identify it as a battery.
 
-2. Infer the primary material and any clearly visible secondary materials.
+2. If not a battery, identify the main physical item(s) in the image (e.g., "plastic water bottle", "aluminum soda can", "cardboard shipping box").
 
-3. Determine a recycling-relevant category and condition.
+3. Infer the primary material and any clearly visible secondary materials.
 
-4. Identify obvious contaminants that would affect recycling (e.g., food residue, labels, liquids, mixed materials).
+4. Determine a recycling-relevant category and condition.
 
-5. Estimate your confidence on a 0–1 scale.
+5. Identify obvious contaminants that would affect recycling (e.g., food residue, labels, liquids, mixed materials).
+
+6. Estimate your confidence on a 0–1 scale.
 
 Important behavior:
 
-- Focus on the **main foreground object** that a user is most likely asking about.
-
-- If multiple items are present, choose the most visually dominant or central item.
-
-- First, internally identify the object type (e.g., "clear PET plastic bottle" or "greasy pizza box"), then map it to materials and category. Do NOT output your reasoning, only the final JSON.
-
-- If you are unsure, choose the best guess but lower the confidence value and use "unknown" / "uncertain" where appropriate.
-
-- Do not invent materials that are not visually supported by the image.
-
-- Use simple, non-technical phrasing for humans (e.g., "clear plastic bottle" instead of "polyethylene terephthalate").
+- **Batteries take absolute priority**: If you see ANY battery indicators (voltage, mAh, battery terminals, wires), it's a battery, NOT cardboard, plastic, or paper
+- Focus on the **main foreground object** that a user is most likely asking about
+- If multiple items are present, choose the most visually dominant or central item
+- First, internally identify the object type, then map it to materials and category. Do NOT output your reasoning, only the final JSON
+- If you are unsure, choose the best guess but lower the confidence value and use "unknown" / "uncertain" where appropriate
+- Do not invent materials that are not visually supported by the image
+- Use simple, non-technical phrasing for humans (e.g., "clear plastic bottle" instead of "polyethylene terephthalate")
 
 Field semantics:
 
-- primaryMaterial (string): The single most important material by volume/area (e.g., "clear plastic", "aluminum", "cardboard", "glass", "organic waste").
+- primaryMaterial (string): The single most important material. For batteries, use "Battery", "Lithium Battery", "Alkaline Battery", "Lead-Acid Battery", etc. For other items: "clear plastic", "aluminum", "cardboard", "glass", "organic waste"
 
-- secondaryMaterials (string[]): Other clearly visible materials (e.g., ["paper label", "plastic cap"]).
+- secondaryMaterials (string[]): Other clearly visible materials (e.g., ["paper label", "plastic cap", "wires", "connector"])
 
-- category (string): Recycling-relevant type, such as:
-
-  - "plastic-container", "plastic-film", "metal-can", "glass-bottle", "paper-cardboard",
-
-    "paper-mixed", "textile", "e-waste", "organic-waste", "non-recyclable", "mixed-material"
+- category (string): Recycling-relevant type:
+  - For batteries: "e-waste" or "hazardous-waste"
+  - For other items: "plastic-container", "plastic-film", "metal-can", "glass-bottle", "paper-cardboard", "paper-mixed", "textile", "organic-waste", "non-recyclable", "mixed-material"
 
 - condition (string): Short description of cleanliness/shape, e.g.:
-
-  - "clean and empty", "partially full", "heavily soiled with food", "crushed but clean",
-
-    "torn and dirty", "broken glass", "unknown".
+  - "clean and empty", "partially full", "heavily soiled with food", "crushed but clean", "torn and dirty", "broken glass", "unknown"
 
 - contaminants (string[]): List anything that would interfere with recycling, e.g.:
+  - ["food residue", "liquid inside", "tape", "plastic film", "oil/grease", "dirt/soil", "metal staples"]
+  - Use [] if there are no obvious contaminants
 
-  - ["food residue", "liquid inside", "tape", "plastic film", "oil/grease", "dirt/soil", "metal staples"].
-
-  - Use [] if there are no obvious contaminants.
-
-- confidence (number): A float in [0, 1] representing overall confidence in your material/category judgment.
+- confidence (number): A float in [0, 1] representing overall confidence in your material/category judgment
 
 - shortDescription (string): 1 short sentence describing what you see in human terms, e.g.:
-
-  - "A clear plastic water bottle with a blue cap, mostly empty."
+  - "A lithium polymer battery with 3.7V and 420mAh capacity, with red and black wires attached"
+  - "A clear plastic water bottle with a blue cap, mostly empty"
 
 Output format:
 
 - Return **only** a valid JSON object with exactly these fields:
 
   { "primaryMaterial": string,
-
     "secondaryMaterials": string[],
-
     "category": string,
-
     "condition": string,
-
     "contaminants": string[],
-
     "confidence": number,
-
     "shortDescription": string }
 
 - No extra text, no markdown, no comments.

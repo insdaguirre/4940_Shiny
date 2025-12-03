@@ -375,56 +375,6 @@ app_ui = ui.page_fluid(
             document.addEventListener('shiny:connected', setupFileUpload);
             document.addEventListener('shiny:value', setupFileUpload);
         }
-        
-        // Show progress indicator immediately on button click (only if inputs are valid)
-        function setupProgressIndicator() {
-            // Use event delegation to handle dynamically created buttons
-            document.addEventListener('click', function(e) {
-                const button = e.target.closest('[id*="check_button"]');
-                if (button) {
-                    // Validate inputs before showing indicator
-                    const fileInput = document.querySelector('[id*="image"]');
-                    const locationInput = document.querySelector('[id*="location"]');
-                    
-                    const hasImage = fileInput && fileInput.files && fileInput.files.length > 0;
-                    const hasLocation = locationInput && locationInput.value && locationInput.value.trim().length > 0;
-                    
-                    // Only show indicator if both are valid
-                    if (hasImage && hasLocation) {
-                        // Find the progress indicator output container
-                        setTimeout(function() {
-                            const progressOutput = document.querySelector('[id*="progress_indicator"]');
-                            if (progressOutput) {
-                                // Check if it's already showing (to avoid duplicate)
-                                if (!progressOutput.querySelector('.analyzing-indicator')) {
-                                    progressOutput.innerHTML = `
-                                        <div class="mb-6 analyzing-indicator">
-                                            <div class="flex items-center text-green-600">
-                                                <span class="animate-spin">⏳</span>
-                                                <span class="ml-2">Analyzing...</span>
-                                            </div>
-                                        </div>
-                                    `;
-                                    progressOutput.style.display = 'block';
-                                }
-                            }
-                        }, 10);
-                    }
-                }
-            });
-        }
-        
-        // Setup progress indicator
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setupProgressIndicator);
-        } else {
-            setupProgressIndicator();
-        }
-        
-        // Re-setup after Shiny updates
-        if (window.Shiny) {
-            document.addEventListener('shiny:connected', setupProgressIndicator);
-        }
     """),
     nav_bar(),
     ui.div(
