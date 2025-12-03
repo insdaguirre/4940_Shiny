@@ -17,7 +17,7 @@ An AI-powered recycling assistant that helps users identify recyclable items and
 - **Frontend**: Shiny (Python) web framework
 - **Backend**: Node.js + Express + TypeScript
 - **RAG Service**: Python + FastAPI + LlamaIndex for querying local recycling regulations
-- **AI Services**: OpenAI Responses API (GPT-4.1) for image analysis + OpenAI Responses API (GPT-4.1 with web search) for recyclability
+- **AI Services**: OpenAI Responses API (GPT-5.1) for image analysis + OpenAI Responses API (GPT-4.1 with web search) for recyclability
 - **Maps**: Mapbox GL JS + Mapbox Geocoding API
 
 ## Prerequisites
@@ -123,7 +123,7 @@ The Shiny app will start and display a URL (typically `http://127.0.0.1:8000`). 
 The Shiny frontend communicates with a Node.js backend API that handles AI processing:
 
 1. **User Input**: User uploads an image, enters location, and optionally adds context via the Shiny UI
-2. **Image Analysis**: Backend calls GPT-4.1 Responses API to analyze the image and identify:
+2. **Image Analysis**: Backend calls GPT-5.1 Responses API to analyze the image and identify:
    - Primary and secondary materials
    - Item condition (clean, soiled, damaged, etc.)
    - Contaminants (food residue, grease, etc.)

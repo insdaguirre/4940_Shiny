@@ -104,7 +104,7 @@ Now analyze this image and return the material analysis as JSON:
 [Image: data:image/jpeg;base64,${base64Data}]`;
 
     const response = await openai.responses.create({
-      model: 'gpt-4.1',
+      model: 'gpt-5.1',
       input: input,
     });
 

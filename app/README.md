@@ -73,7 +73,7 @@ The Shiny app will start and display a URL (typically `http://127.0.0.1:8000`). 
 
 The Shiny app calls the existing Node.js backend API endpoints:
 
-1. **POST /api/analyze/vision**: Analyzes the uploaded image using GPT-4.1 Responses API
+1. **POST /api/analyze/vision**: Analyzes the uploaded image using GPT-5.1 Responses API
 2. **POST /api/analyze/recyclability**: Determines recyclability and finds facilities using GPT-4.1 Responses API with web search
 
 ### Process Flow
