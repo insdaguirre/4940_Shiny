@@ -191,8 +191,11 @@ Please:
     "address": string,
     "url": string,
     "notes": string
-  }]
+  }],
+  "webSearchSources": string[]
 }
+
+IMPORTANT: Include a "webSearchSources" array with URLs of web pages you consulted for recycling information (not just facilities). This should include any websites you used to determine recyclability, disposal methods, or general recycling guidelines. Include the full URLs of the sources you used.
 
 Search for queries like "recycling facilities ${location}" or "${visionResult.primaryMaterial} disposal ${location}" to find local facilities.`;
 
@@ -226,6 +229,11 @@ Search for queries like "recycling facilities ${location}" or "${visionResult.pr
     // Parse JSON from response
     const parsed = extractJSONFromResponse(outputText);
 
+    // Extract web search sources
+    const webSearchSources: string[] = Array.isArray(parsed.webSearchSources)
+      ? parsed.webSearchSources.filter((url: any) => typeof url === 'string' && url.trim().length > 0)
+      : [];
+
     // Validate and structure the response
     const facilities: Facility[] = Array.isArray(parsed.facilities)
       ? parsed.facilities.map((f: any) => ({
@@ -251,6 +259,7 @@ Search for queries like "recycling facilities ${location}" or "${visionResult.pr
       locationUsed: parsed.locationUsed || location,
       facilities: limitedFacilities,
       ragSources: ragSources.length > 0 ? ragSources : undefined,
+      webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
     };
   } catch (error) {
     console.error('GPT-5 service error:', error);

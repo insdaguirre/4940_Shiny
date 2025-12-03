@@ -37,5 +37,6 @@ export interface AnalyzeResponse {
   locationUsed: string;
   facilities: Facility[];
   ragSources?: string[];
+  webSearchSources?: string[];
 }
 
