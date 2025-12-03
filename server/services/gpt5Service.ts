@@ -132,6 +132,7 @@ export async function analyzeRecyclability(
     
     // Query RAG service for local regulations
     let ragContext = '';
+    let ragSources: string[] = [];
     try {
       const ragResult = await queryRAG(
         visionResult.primaryMaterial,
@@ -142,6 +143,7 @@ export async function analyzeRecyclability(
       
       if (ragResult && ragResult.regulations) {
         ragContext = ragResult.regulations;
+        ragSources = ragResult.sources || [];
         console.log('RAG query successful, regulations retrieved');
       } else {
         console.log('RAG query returned no results or service unavailable');
@@ -248,6 +250,7 @@ Search for queries like "recycling facilities ${location}" or "${visionResult.pr
       reasoning: parsed.reasoning || 'Analysis completed',
       locationUsed: parsed.locationUsed || location,
       facilities: limitedFacilities,
+      ragSources: ragSources.length > 0 ? ragSources : undefined,
     };
   } catch (error) {
     console.error('GPT-5 service error:', error);

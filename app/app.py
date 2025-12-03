@@ -629,6 +629,7 @@ def server(input, output, session):
         instructions = result.get("instructions", [])
         confidence = result.get("confidence", 0)
         reasoning = result.get("reasoning", "")
+        rag_sources = result.get("ragSources", [])
         
         icon = "✅" if is_recyclable else "❌"
         color_class = "text-green-600" if is_recyclable else "text-red-600"
@@ -669,9 +670,29 @@ def server(input, output, session):
             # Instructions
             ui.div(
                 ui.p("INSTRUCTIONS", class_="text-xs font-medium text-gray-500 mb-3"),
-                ui.tags.ol(*instruction_items, class_="list-decimal list-inside space-y-2"),
+                ui.tags.ol(*instruction_items, class_="list-decimal space-y-2"),
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if instruction_items else None,
+            # RAG Sources
+            ui.div(
+                ui.p("SOURCES", class_="text-xs font-medium text-gray-500 mb-3"),
+                ui.div(
+                    *[
+                        ui.div(
+                            ui.a(
+                                source if source.startswith("http") else source,
+                                href=source if source.startswith("http") else "#",
+                                target="_blank" if source.startswith("http") else None,
+                                class_="text-sm text-blue-600 hover:text-blue-800 underline" if source.startswith("http") else "text-sm text-gray-600",
+                            ),
+                            class_="mb-2"
+                        )
+                        for source in rag_sources
+                    ],
+                    class_="space-y-1"
+                ),
+                class_="mb-6 pt-6 border-t border-gray-100"
+            ) if rag_sources else None,
             # Confidence
             ui.div(
                 ui.p("CONFIDENCE", class_="text-xs font-medium text-gray-500 mb-2"),
