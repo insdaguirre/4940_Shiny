@@ -497,9 +497,10 @@ def server(input, output, session):
         """Display progress indicator while analysis is in progress."""
         stage = analysis_stage.get()
         
+        # Always return a UI element (even if empty) to maintain DOM structure
         # Hide when idle, complete, or error
         if stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR:
-            return None
+            return ui.div(style="display: none;")
         
         # Map stages to user-friendly messages
         stage_messages = {
@@ -545,6 +546,8 @@ def server(input, output, session):
         
         # Only set analyzing stage AFTER validation passes
         analysis_stage.set(STAGE_ANALYZING_VISION)
+        # CRITICAL: Yield control to allow Shiny to process reactive updates
+        await asyncio.sleep(0)
         
         try:
             # Stage 1: Analyze image (Vision API)
@@ -560,6 +563,7 @@ def server(input, output, session):
             
             # Stage 3: Analyze recyclability (includes RAG query and web search)
             analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
+            await asyncio.sleep(0)  # Yield to allow UI update
             context = input.context() or ""
             analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
             analysis_result.set(analysis_res)
