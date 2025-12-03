@@ -112,6 +112,10 @@ def query_rag(
         
         query = "\n".join(query_parts)
         
+        # Log the query being executed
+        print(f"RAG Query: material={material}, location={location}, county={county}")
+        print(f"RAG Query text: {query[:200]}...")  # Log first 200 chars
+        
         # Execute query
         response = query_engine.query(query)
         response_text = str(response)
@@ -126,6 +130,11 @@ def query_rag(
                         sources.append(metadata['source_url'])
                     elif 'source_file' in metadata:
                         sources.append(metadata['source_file'])
+        
+        # Log what was returned
+        print(f"RAG Response: regulations_length={len(response_text)}, sources_count={len(sources)}")
+        if sources:
+            print(f"RAG Sources: {sources}")
         
         return response_text, sources
         

@@ -630,6 +630,7 @@ def server(input, output, session):
         confidence = result.get("confidence", 0)
         reasoning = result.get("reasoning", "")
         rag_sources = result.get("ragSources", [])
+        rag_queried = result.get("ragQueried", False)
         web_search_sources = result.get("webSearchSources", [])
         
         icon = "✅" if is_recyclable else "❌"
@@ -712,6 +713,14 @@ def server(input, output, session):
                     ],
                     class_="space-y-1"
                 ),
+                # Show "(no information found in RAG)" message if RAG was queried but returned no results
+                ui.div(
+                    ui.p(
+                        "(no information found in RAG)",
+                        class_="text-sm text-gray-500 italic mt-3"
+                    ),
+                    class_="mb-2"
+                ) if (rag_queried and not rag_sources and web_search_sources) else None,
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if web_search_sources else None,
             # Confidence

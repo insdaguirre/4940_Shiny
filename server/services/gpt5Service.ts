@@ -133,6 +133,17 @@ export async function analyzeRecyclability(
     // Query RAG service for local regulations
     let ragContext = '';
     let ragSources: string[] = [];
+    let ragQueried = false;
+    
+    // Check if RAG service URL is configured
+    const ragServiceUrl = process.env.RAG_SERVICE_URL;
+    console.log('RAG Service Status:', {
+      configured: !!ragServiceUrl,
+      url: ragServiceUrl ? 'set' : 'not set',
+      material: visionResult.primaryMaterial,
+      location
+    });
+    
     try {
       const ragResult = await queryRAG(
         visionResult.primaryMaterial,
@@ -141,16 +152,39 @@ export async function analyzeRecyclability(
         context
       );
       
-      if (ragResult && ragResult.regulations) {
-        ragContext = ragResult.regulations;
+      // Track that RAG was queried (even if it returned empty)
+      ragQueried = true;
+      
+      if (ragResult) {
+        // Always include sources if available, even if regulations are empty
         ragSources = ragResult.sources || [];
-        console.log('RAG query successful, regulations retrieved');
+        
+        // Use regulations if they exist and are non-empty
+        if (ragResult.regulations && ragResult.regulations.trim().length > 0) {
+          ragContext = ragResult.regulations;
+          console.log('RAG query successful:', {
+            regulationsLength: ragResult.regulations.length,
+            sourcesCount: ragSources.length,
+            sources: ragSources
+          });
+        } else {
+          console.log('RAG query returned empty regulations:', {
+            regulationsLength: ragResult.regulations?.length || 0,
+            sourcesCount: ragSources.length,
+            sources: ragSources,
+            material: visionResult.primaryMaterial,
+            location
+          });
+        }
       } else {
-        console.log('RAG query returned no results or service unavailable');
+        console.log('RAG query returned null - service may be unavailable');
       }
     } catch (error) {
       console.error('RAG query error (non-fatal):', error);
-      // Continue without RAG context
+      // Continue without RAG context, but still mark as queried if we attempted it
+      if (ragServiceUrl) {
+        ragQueried = true;
+      }
     }
     
     // Prepare the input prompt
@@ -259,6 +293,7 @@ Search for queries like "recycling facilities ${location}" or "${visionResult.pr
       locationUsed: parsed.locationUsed || location,
       facilities: limitedFacilities,
       ragSources: ragSources.length > 0 ? ragSources : undefined,
+      ragQueried: ragQueried,
       webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
     };
   } catch (error) {
