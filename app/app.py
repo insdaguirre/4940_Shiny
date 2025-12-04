@@ -644,6 +644,70 @@ def server(input, output, session):
         rag_queried = result.get("ragQueried", False)
         web_search_sources = result.get("webSearchSources", [])
         
+        def normalize_sources(sources: list[str]) -> list[str]:
+            """Deduplicate sources while preserving order."""
+            seen = set()
+            normalized = []
+            for src in sources or []:
+                if not src:
+                    continue
+                key = src.strip().lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                normalized.append(src.strip())
+            return normalized
+        
+        def render_sources_section(title: str, sources: list[str], prefix: str, extra_body=None):
+            sources = normalize_sources(sources)
+            if not sources and not extra_body:
+                return None
+            
+            body_id = f"{prefix}-sources-body"
+            icon_id = f"{prefix}-sources-icon"
+            toggle_script = (
+                "const body=document.getElementById('{body_id}');"
+                "const icon=document.getElementById('{icon_id}');"
+                "body.classList.toggle('hidden');"
+                "icon.textContent=body.classList.contains('hidden')?'+':'−';"
+            ).format(body_id=body_id, icon_id=icon_id)
+            
+            source_items = [
+                ui.div(
+                    ui.a(
+                        src,
+                        href=src if src.startswith("http") else "#",
+                        target="_blank" if src.startswith("http") else None,
+                        class_="text-sm text-blue-600 hover:text-blue-800 underline break-all" if src.startswith("http") else "text-sm text-gray-600 break-all",
+                    ) if src.startswith("http") else ui.span(src, class_="text-sm text-gray-600 break-all"),
+                    class_="text-sm text-gray-700"
+                )
+                for src in sources
+            ]
+            
+            body_children = []
+            body_children.extend(source_items)
+            if extra_body:
+                body_children.append(extra_body)
+            
+            return ui.div(
+                ui.div(
+                    ui.span(title, class_="text-xs font-medium text-gray-500"),
+                    ui.button(
+                        ui.span("+", id=icon_id),
+                        onclick=toggle_script,
+                        class_="text-xs text-gray-500 border border-gray-300 rounded-full w-6 h-6 flex items-center justify-center ml-2"
+                    ),
+                    class_="flex items-center justify-between cursor-pointer select-none"
+                ),
+                ui.div(
+                    *body_children,
+                    id=body_id,
+                    class_="mt-2 space-y-2 hidden"
+                ),
+                class_="mb-6 pt-6 border-t border-gray-100"
+            )
+        
         icon = "✅" if is_recyclable else "❌"
         color_class = "text-green-600" if is_recyclable else "text-red-600"
         bg_class = "bg-green-100" if is_recyclable else "bg-red-100"
@@ -652,6 +716,30 @@ def server(input, output, session):
             ui.tags.li(inst, class_="text-sm text-gray-700 leading-relaxed")
             for inst in instructions
         ] if instructions else []
+        
+        rag_sources_section = render_sources_section(
+            "SOURCES (RAG - Local Regulations)",
+            rag_sources,
+            "rag"
+        )
+        
+        no_rag_message = (
+            ui.div(
+                ui.p(
+                    "(no information found in RAG)",
+                    class_="text-sm text-gray-500 italic mt-1"
+                )
+            )
+            if (rag_queried and not rag_sources and web_search_sources)
+            else None
+        )
+        
+        web_sources_section = render_sources_section(
+            "SOURCES (Web Search)",
+            web_search_sources,
+            "web",
+            extra_body=no_rag_message
+        )
         
         return ui.div(
             ui.div(
@@ -686,87 +774,8 @@ def server(input, output, session):
                 ui.tags.ul(*instruction_items, class_="list-none space-y-2"),
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if instruction_items else None,
-            # RAG Sources
-            # RAG Sources (collapsible)
-            ui.div(
-                ui.div(
-                    ui.p(
-                        "SOURCES (RAG - Local Regulations)",
-                        class_="text-xs font-medium text-gray-500"
-                    ),
-                    ui.span("▼", id="rag-sources-chevron", class_="text-xs text-gray-400"),
-                    class_="flex items-center justify-between cursor-pointer",
-                    onclick=(
-                        "const body=document.getElementById('rag-sources-body');"
-                        "const chev=document.getElementById('rag-sources-chevron');"
-                        "if(body){body.classList.toggle('hidden');}"
-                        "if(chev){chev.textContent = body && !body.classList.contains('hidden') ? '▲' : '▼';}"
-                    ),
-                ),
-                ui.div(
-                    *[
-                        ui.div(
-                            ui.a(
-                                f"RAG: {source}" if source.startswith("http") else f"RAG: {source}",
-                                href=source if source.startswith("http") else "#",
-                                target="_blank" if source.startswith("http") else None,
-                                class_="text-sm text-blue-600 hover:text-blue-800 underline"
-                                if source.startswith("http")
-                                else "text-sm text-gray-600",
-                            ),
-                            class_="mb-1"
-                        )
-                        for source in rag_sources
-                    ],
-                    id="rag-sources-body",
-                    class_="mt-2 space-y-1 hidden"
-                ),
-                class_="mb-6 pt-6 border-t border-gray-100"
-            ) if rag_sources else None,
-            # Web Search Sources (collapsible)
-            ui.div(
-                ui.div(
-                    ui.p(
-                        "SOURCES (Web Search)",
-                        class_="text-xs font-medium text-gray-500"
-                    ),
-                    ui.span("▼", id="web-sources-chevron", class_="text-xs text-gray-400"),
-                    class_="flex items-center justify-between cursor-pointer",
-                    onclick=(
-                        "const body=document.getElementById('web-sources-body');"
-                        "const chev=document.getElementById('web-sources-chevron');"
-                        "if(body){body.classList.toggle('hidden');}"
-                        "if(chev){chev.textContent = body && !body.classList.contains('hidden') ? '▲' : '▼';}"
-                    ),
-                ),
-                ui.div(
-                    *[
-                        ui.div(
-                            ui.a(
-                                source if source.startswith("http") else source,
-                                href=source if source.startswith("http") else "#",
-                                target="_blank" if source.startswith("http") else None,
-                                class_="text-sm text-blue-600 hover:text-blue-800 underline"
-                                if source.startswith("http")
-                                else "text-sm text-gray-600",
-                            ),
-                            class_="mb-1"
-                        )
-                        for source in web_search_sources
-                    ],
-                    id="web-sources-body",
-                    class_="mt-2 space-y-1 hidden"
-                ),
-                # Show "(no information found in RAG)" message if RAG was queried but returned no results
-                ui.div(
-                    ui.p(
-                        "(no information found in RAG)",
-                        class_="text-sm text-gray-500 italic mt-3"
-                    ),
-                    class_="mb-2"
-                ) if (rag_queried and not rag_sources and web_search_sources) else None,
-                class_="mb-6 pt-6 border-gray-100 border-t"
-            ) if web_search_sources else None,
+            rag_sources_section,
+            web_sources_section,
             # Confidence
             ui.div(
                 ui.p("CONFIDENCE", class_="text-xs font-medium text-gray-500 mb-2"),
