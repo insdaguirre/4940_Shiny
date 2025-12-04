@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 from llama_index.core import StorageContext, load_index_from_storage, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.base.retrievers import BaseRetriever
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import dotenv
@@ -15,13 +16,14 @@ dotenv.load_dotenv()
 # For local development: Index is also available at ../rag/rag_index_morechunked/
 RAG_INDEX_PATH = Path(__file__).parent / "rag_index_morechunked"
 
-# Global cache for the query engine
+# Global cache for the query engine and index
 _query_engine: Optional[RetrieverQueryEngine] = None
+_index = None
 
 
 def get_rag_query_engine() -> RetrieverQueryEngine:
     """Load the RAG index and return a query engine (cached singleton)."""
-    global _query_engine
+    global _query_engine, _index
     
     if _query_engine is not None:
         return _query_engine
@@ -46,13 +48,29 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
     
     try:
         storage_context = StorageContext.from_defaults(persist_dir=str(RAG_INDEX_PATH))
-        index = load_index_from_storage(storage_context)
+        _index = load_index_from_storage(storage_context)
         # Increase similarity_top_k to retrieve more relevant chunks
-        _query_engine = index.as_query_engine(similarity_top_k=10)
+        _query_engine = _index.as_query_engine(similarity_top_k=10)
         print(f"✓ RAG query engine loaded successfully from {RAG_INDEX_PATH}")
         return _query_engine
     except Exception as e:
         raise RuntimeError(f"Failed to load RAG index: {str(e)}")
+
+
+def get_rag_retriever() -> BaseRetriever:
+    """Get a retriever for direct chunk retrieval (bypasses LLM synthesis)."""
+    global _index
+    
+    # Ensure index is loaded
+    if _index is None:
+        get_rag_query_engine()
+    
+    if _index is None:
+        raise RuntimeError("Failed to load RAG index")
+    
+    # Create retriever with higher top_k for better coverage
+    retriever = _index.as_retriever(similarity_top_k=15)
+    return retriever
 
 
 def extract_county_from_location(location: str) -> Optional[str]:
@@ -194,31 +212,72 @@ def query_rag(
             # Simple, direct query that will match document chunks
             return " ".join(query_parts)
         
-        # Helper function to extract sources from a response
-        def extract_sources_from_response(response) -> list[str]:
+        # Helper function to extract sources from nodes
+        def extract_sources_from_nodes(nodes) -> list[str]:
             sources = []
-            if hasattr(response, 'source_nodes'):
-                for node in response.source_nodes:
-                    if hasattr(node, 'node') and hasattr(node.node, 'metadata'):
-                        metadata = node.node.metadata
-                        if 'source_url' in metadata:
-                            sources.append(metadata['source_url'])
-                        elif 'source_file' in metadata:
-                            sources.append(metadata['source_file'])
+            for node in nodes:
+                if hasattr(node, 'node') and hasattr(node.node, 'metadata'):
+                    metadata = node.node.metadata
+                    if 'source_url' in metadata:
+                        sources.append(metadata['source_url'])
+                    elif 'source_file' in metadata:
+                        sources.append(metadata['source_file'])
             return sources
+        
+        # Helper function to extract text from nodes
+        def extract_text_from_nodes(nodes) -> str:
+            texts = []
+            for node in nodes:
+                if hasattr(node, 'node') and hasattr(node.node, 'text'):
+                    texts.append(node.node.text)
+                elif hasattr(node, 'text'):
+                    texts.append(node.text)
+            return "\n\n".join(texts)
         
         # Try primary query with original material
         primary_query = build_query(material)
         print(f"RAG Query (primary): material={material}, expanded_terms={material_terms}, location={location}, county={county}")
-        print(f"RAG Query text: {primary_query[:300]}...")  # Log first 300 chars
+        print(f"RAG Query text: {primary_query}")
         
+        # First, try LLM synthesis with query engine
         response = query_engine.query(primary_query)
         response_text = str(response)
-        sources = extract_sources_from_response(response)
+        
+        # Get source nodes from response
+        sources = []
+        if hasattr(response, 'source_nodes'):
+            sources = extract_sources_from_nodes(response.source_nodes)
         
         # Check if primary query was successful
         # Consider it successful if we have substantial text (>50 chars) OR sources
         primary_successful = (response_text and len(response_text.strip()) > 50) or len(sources) > 0
+        
+        # If LLM synthesis returned empty but we have sources, use retriever to get raw chunks
+        if not primary_successful and len(sources) == 0:
+            print(f"LLM synthesis returned empty, trying direct retrieval...")
+            try:
+                retriever = get_rag_retriever()
+                retrieved_nodes = retriever.retrieve(primary_query)
+                
+                if retrieved_nodes:
+                    print(f"Retrieved {len(retrieved_nodes)} chunks directly")
+                    # Extract raw text from chunks
+                    raw_text = extract_text_from_nodes(retrieved_nodes)
+                    raw_sources = extract_sources_from_nodes(retrieved_nodes)
+                    
+                    if raw_text and len(raw_text.strip()) > 50:
+                        response_text = raw_text
+                        sources = raw_sources
+                        primary_successful = True
+                        print(f"Using raw retrieved chunks (text_len={len(raw_text)}, sources={len(sources)})")
+                    else:
+                        print(f"Retrieved chunks but text too short (text_len={len(raw_text)})")
+                else:
+                    print("No chunks retrieved from vector store")
+            except Exception as e:
+                print(f"Error using direct retriever: {e}")
+                import traceback
+                traceback.print_exc()
         
         # If primary query didn't return good results, try alternative terms
         if not primary_successful and len(material_terms) > 1:
@@ -231,14 +290,35 @@ def query_rag(
                 
                 try:
                     alt_query = build_query(alt_term)
-                    print(f"RAG Query (alternative): trying material={alt_term}")
+                    print(f"RAG Query (alternative): trying material={alt_term}, query={alt_query}")
                     
+                    # Try LLM synthesis first
                     alt_response = query_engine.query(alt_query)
                     alt_text = str(alt_response)
-                    alt_sources = extract_sources_from_response(alt_response)
+                    alt_sources = []
+                    if hasattr(alt_response, 'source_nodes'):
+                        alt_sources = extract_sources_from_nodes(alt_response.source_nodes)
                     
-                    # If this alternative query gives better results, use it
+                    # If LLM synthesis failed, try direct retrieval
                     alt_successful = (alt_text and len(alt_text.strip()) > 50) or len(alt_sources) > 0
+                    
+                    if not alt_successful:
+                        print(f"LLM synthesis failed for '{alt_term}', trying direct retrieval...")
+                        try:
+                            retriever = get_rag_retriever()
+                            retrieved_nodes = retriever.retrieve(alt_query)
+                            
+                            if retrieved_nodes:
+                                raw_text = extract_text_from_nodes(retrieved_nodes)
+                                raw_sources = extract_sources_from_nodes(retrieved_nodes)
+                                
+                                if raw_text and len(raw_text.strip()) > 50:
+                                    alt_text = raw_text
+                                    alt_sources = raw_sources
+                                    alt_successful = True
+                                    print(f"Direct retrieval succeeded for '{alt_term}' (text_len={len(raw_text)})")
+                        except Exception as e:
+                            print(f"Error using direct retriever for '{alt_term}': {e}")
                     
                     if alt_successful:
                         # Use the alternative result if it's better
@@ -254,6 +334,8 @@ def query_rag(
                         
                 except Exception as e:
                     print(f"Error querying with alternative term '{alt_term}': {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
         
         # Log final results
