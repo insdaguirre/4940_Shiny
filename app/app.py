@@ -693,8 +693,10 @@ def server(input, output, session):
             return ui.div(
                 ui.div(
                     ui.span(title, class_="text-xs font-medium text-gray-500"),
-                    ui.button(
-                        ui.span("+", id=icon_id),
+                    ui.tags.button(
+                        "+",
+                        id=icon_id,
+                        type="button",
                         onclick=toggle_script,
                         class_="text-xs text-gray-500 border border-gray-300 rounded-full w-6 h-6 flex items-center justify-center ml-2"
                     ),
