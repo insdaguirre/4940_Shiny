@@ -163,194 +163,97 @@ def query_rag(
     context: str = ""
 ) -> tuple[str, list[str]]:
     """
-    Query RAG for recycling information.
-    
-    Args:
-        material: Primary material (e.g., "Plastic", "Glass", "Metal")
-        location: User location (e.g., "Ithaca, NY", "Albany, NY 12201")
-        condition: Item condition (e.g., "clean", "soiled", "damaged")
-        context: Additional context from user
-        
-    Returns:
-        Tuple of (regulations_text, sources_list)
-        Returns empty string and empty list if query fails
+    Query RAG for recycling information using direct vector retrieval only.
+
+    This bypasses LLM synthesis and always returns raw chunks from the index.
     """
     try:
-        query_engine = get_rag_query_engine()
-        
-        # Extract county from location if possible
+        # Ensure index and retriever are ready
+        get_rag_query_engine()  # loads _index and configures Settings
+        retriever = get_rag_retriever()
+
         county = extract_county_from_location(location)
-        
-        # Normalize and expand material terms for better retrieval
         material_terms = normalize_and_expand_material(material)
-        
-        # Helper function to build a query for a specific material term
-        # Simplified query that matches document style for better embedding similarity
-        def build_query(material_term: str) -> str:
-            # Build a simple, keyword-rich query that matches how documents are written
-            query_parts = [material_term, "recycling"]
-            
+
+        def build_query(term: str) -> str:
+            parts = [term, "recycling"]
             if county:
-                query_parts.append(county.capitalize())
-                query_parts.append("County")
-            elif "ithaca" in location.lower() or "tompkins" in location.lower():
-                query_parts.append("Tompkins")
-                query_parts.append("County")
-            elif "albany" in location.lower():
-                query_parts.append("Albany")
-                query_parts.append("County")
-            
-            # Add location context
+                parts += [county.capitalize(), "County"]
             if "new york" in location.lower() or "ny" in location.lower():
-                query_parts.append("New York")
-            
-            # Add condition/context if relevant
+                parts.append("New York")
             if condition and condition.lower() not in ["unknown", "none", ""]:
-                query_parts.append(condition)
-            
-            # Simple, direct query that will match document chunks
-            return " ".join(query_parts)
-        
-        # Helper function to extract sources from nodes
+                parts.append(condition)
+            return " ".join(parts)
+
         def extract_sources_from_nodes(nodes) -> list[str]:
-            sources = []
+            out: list[str] = []
             for node in nodes:
-                if hasattr(node, 'node') and hasattr(node.node, 'metadata'):
-                    metadata = node.node.metadata
-                    if 'source_url' in metadata:
-                        sources.append(metadata['source_url'])
-                    elif 'source_file' in metadata:
-                        sources.append(metadata['source_file'])
-            return sources
-        
-        # Helper function to extract text from nodes
+                n = getattr(node, "node", node)
+                md = getattr(n, "metadata", {}) or {}
+                if "source_url" in md:
+                    out.append(md["source_url"])
+                elif "source_file" in md:
+                    out.append(md["source_file"])
+            return out
+
         def extract_text_from_nodes(nodes) -> str:
-            texts = []
+            texts: list[str] = []
             for node in nodes:
-                if hasattr(node, 'node') and hasattr(node.node, 'text'):
-                    texts.append(node.node.text)
-                elif hasattr(node, 'text'):
-                    texts.append(node.text)
+                n = getattr(node, "node", node)
+                txt = getattr(n, "text", None)
+                if txt:
+                    texts.append(txt)
             return "\n\n".join(texts)
-        
-        # Try primary query with original material
-        primary_query = build_query(material)
-        print(f"RAG Query (primary): material={material}, expanded_terms={material_terms}, location={location}, county={county}")
-        print(f"RAG Query text: {primary_query}")
-        
-        # First, try LLM synthesis with query engine
-        response = query_engine.query(primary_query)
-        response_text = str(response)
-        
-        # Get source nodes from response
-        sources = []
-        if hasattr(response, 'source_nodes'):
-            sources = extract_sources_from_nodes(response.source_nodes)
-        
-        # Check if primary query was successful
-        # Consider it successful if we have any non-empty text OR sources
-        primary_successful = bool(response_text and response_text.strip()) or len(sources) > 0
-        
-        # If LLM synthesis returned empty but we have sources, use retriever to get raw chunks
-        if not primary_successful and len(sources) == 0:
-            print(f"LLM synthesis returned empty, trying direct retrieval...")
+
+        best_text = ""
+        best_sources: list[str] = []
+
+        for term in material_terms:
+            q = build_query(term)
+            print(f"RAG RAW RETRIEVAL: term={term}, query={q}")
             try:
-                retriever = get_rag_retriever()
-                retrieved_nodes = retriever.retrieve(primary_query)
-                
-                if retrieved_nodes:
-                    print(f"Retrieved {len(retrieved_nodes)} chunks directly")
-                    # Extract raw text from chunks
-                    raw_text = extract_text_from_nodes(retrieved_nodes)
-                    raw_sources = extract_sources_from_nodes(retrieved_nodes)
-                    
-                    if raw_text and raw_text.strip():
-                        response_text = raw_text
-                        sources = raw_sources
-                        primary_successful = True
-                        print(f"Using raw retrieved chunks (text_len={len(raw_text)}, sources={len(sources)})")
-                    else:
-                        print(f"Retrieved chunks but empty text (text_len={len(raw_text)})")
-                else:
-                    print("No chunks retrieved from vector store")
+                nodes = retriever.retrieve(q)
             except Exception as e:
-                print(f"Error using direct retriever: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # If primary query didn't return good results, try alternative terms
-        if not primary_successful and len(material_terms) > 1:
-            print(f"Primary query returned insufficient results (text_len={len(response_text)}, sources={len(sources)}), trying alternative terms...")
-            
-            # Try each alternative term (skip the first one as it's the original)
-            for alt_term in material_terms[1:]:
-                if alt_term.lower() == material.lower():
-                    continue  # Skip if it's the same as original
-                
-                try:
-                    alt_query = build_query(alt_term)
-                    print(f"RAG Query (alternative): trying material={alt_term}, query={alt_query}")
-                    
-                    # Try LLM synthesis first
-                    alt_response = query_engine.query(alt_query)
-                    alt_text = str(alt_response)
-                    alt_sources = []
-                    if hasattr(alt_response, 'source_nodes'):
-                        alt_sources = extract_sources_from_nodes(alt_response.source_nodes)
-                    
-                    # If LLM synthesis failed, try direct retrieval
-                    alt_successful = bool(alt_text and alt_text.strip()) or len(alt_sources) > 0
-                    
-                    if not alt_successful:
-                        print(f"LLM synthesis failed for '{alt_term}', trying direct retrieval...")
-                        try:
-                            retriever = get_rag_retriever()
-                            retrieved_nodes = retriever.retrieve(alt_query)
-                            
-                            if retrieved_nodes:
-                                raw_text = extract_text_from_nodes(retrieved_nodes)
-                                raw_sources = extract_sources_from_nodes(retrieved_nodes)
-                                
-                                if raw_text and raw_text.strip():
-                                    alt_text = raw_text
-                                    alt_sources = raw_sources
-                                    alt_successful = True
-                                    print(f"Direct retrieval succeeded for '{alt_term}' (text_len={len(raw_text)})")
-                        except Exception as e:
-                            print(f"Error using direct retriever for '{alt_term}': {e}")
-                    
-                    if alt_successful:
-                        # Use the alternative result if it's better
-                        if len(alt_text.strip()) > len(response_text.strip()) or len(alt_sources) > len(sources):
-                            response_text = alt_text
-                            sources = alt_sources
-                            print(f"Alternative query with '{alt_term}' returned better results")
-                            # If we got good results, we can stop trying more alternatives
-                            if len(alt_text.strip()) > 100 and len(alt_sources) > 0:
-                                break
-                    else:
-                        print(f"Alternative query with '{alt_term}' also returned insufficient results")
-                        
-                except Exception as e:
-                    print(f"Error querying with alternative term '{alt_term}': {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
-        
-        # Log final results
-        print(f"RAG Response (final): regulations_length={len(response_text)}, sources_count={len(sources)}")
-        if sources:
-            print(f"RAG Sources: {sources}")
+                print(f"Error retrieving for term '{term}': {e}")
+                continue
+
+            if not nodes:
+                print(f"No nodes retrieved for term '{term}'")
+                continue
+
+            raw_text = extract_text_from_nodes(nodes)
+            raw_sources = extract_sources_from_nodes(nodes)
+            print(
+                f"Term '{term}' → {len(nodes)} nodes, "
+                f"text_len={len(raw_text)}, sources={len(raw_sources)}"
+            )
+
+            if raw_text and raw_text.strip():
+                if (len(raw_text) > len(best_text)) or (
+                    len(raw_sources) > len(best_sources)
+                ):
+                    best_text = raw_text
+                    best_sources = raw_sources
+
+            if best_text and best_sources:
+                break
+
+        print(
+            f"RAG RAW RESPONSE: regulations_length={len(best_text)}, "
+            f"sources_count={len(best_sources)}"
+        )
+        if best_sources:
+            print(f"RAG RAW Sources: {best_sources}")
         else:
-            print("RAG Response: No sources found")
-        
-        return response_text, sources
-        
+            print("RAG RAW: No sources found")
+
+        return best_text or "", best_sources
+
     except FileNotFoundError as e:
         print(f"RAG index not found: {e}")
         return "", []
     except Exception as e:
-        print(f"RAG query error: {e}")
+        print(f"RAG query error (raw mode): {e}")
         import traceback
         traceback.print_exc()
         return "", []
