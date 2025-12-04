@@ -1,10 +1,9 @@
 """RAG query logic for querying recycling regulations."""
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from llama_index.core import StorageContext, load_index_from_storage, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.base.retrievers import BaseRetriever
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import dotenv
@@ -57,7 +56,7 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
         raise RuntimeError(f"Failed to load RAG index: {str(e)}")
 
 
-def get_rag_retriever() -> BaseRetriever:
+def get_rag_retriever() -> Any:
     """Get a retriever for direct chunk retrieval (bypasses LLM synthesis)."""
     global _index
     
