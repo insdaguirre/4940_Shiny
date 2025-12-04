@@ -126,7 +126,7 @@ Now analyze this image and return the material analysis as JSON:`;
           ]
         }
       ],
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
       temperature: 0.2
     });
 
