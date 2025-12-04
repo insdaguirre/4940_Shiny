@@ -663,23 +663,14 @@ def server(input, output, session):
             if not sources and not extra_body:
                 return None
             
-            body_id = f"{prefix}-sources-body"
-            icon_id = f"{prefix}-sources-icon"
-            toggle_script = (
-                "const body=document.getElementById('{body_id}');"
-                "const icon=document.getElementById('{icon_id}');"
-                "body.classList.toggle('hidden');"
-                "icon.textContent=body.classList.contains('hidden')?'+':'−';"
-            ).format(body_id=body_id, icon_id=icon_id)
-            
             source_items = [
                 ui.div(
                     ui.a(
                         src,
                         href=src if src.startswith("http") else "#",
                         target="_blank" if src.startswith("http") else None,
-                        class_="text-sm text-blue-600 hover:text-blue-800 underline break-all" if src.startswith("http") else "text-sm text-gray-600 break-all",
-                    ) if src.startswith("http") else ui.span(src, class_="text-sm text-gray-600 break-all"),
+                        class_="text-sm text-blue-600 hover:text-blue-800 underline break-all block" if src.startswith("http") else "text-sm text-gray-600 break-all block",
+                    ) if src.startswith("http") else ui.span(src, class_="text-sm text-gray-600 break-all block"),
                     class_="text-sm text-gray-700"
                 )
                 for src in sources
@@ -690,23 +681,16 @@ def server(input, output, session):
             if extra_body:
                 body_children.append(extra_body)
             
-            return ui.div(
-                ui.div(
-                    ui.span(title, class_="text-xs font-medium text-gray-500"),
-                    ui.tags.button(
-                        "+",
-                        id=icon_id,
-                        type="button",
-                        onclick=toggle_script,
-                        class_="text-xs text-gray-500 border border-gray-300 rounded-full w-6 h-6 flex items-center justify-center ml-2"
-                    ),
-                    class_="flex items-center justify-between cursor-pointer select-none"
-                ),
-                ui.div(
-                    *body_children,
-                    id=body_id,
-                    class_="mt-2 space-y-2 hidden"
-                ),
+            summary = ui.tags.summary(
+                ui.span(title, class_="text-xs font-medium text-gray-500"),
+                class_="flex items-center justify-between cursor-pointer select-none"
+            )
+            
+            details_body = ui.div(*body_children, class_="mt-2 space-y-2")
+            
+            return ui.tags.details(
+                summary,
+                details_body,
                 class_="mb-6 pt-6 border-t border-gray-100"
             )
         
