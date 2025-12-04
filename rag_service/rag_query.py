@@ -36,7 +36,7 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
         )
     
     Settings.embed_model = OpenAIEmbedding(api_key=openai_api_key)
-    Settings.llm = OpenAI(api_key=openai_api_key, model="gpt-3.5-turbo")
+    Settings.llm = OpenAI(api_key=openai_api_key, model="gpt-4.2")
     print(f"✓ Initialized OpenAI embeddings and LLM for RAG queries")
     
     if not RAG_INDEX_PATH.exists():
