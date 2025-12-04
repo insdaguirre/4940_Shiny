@@ -376,6 +376,31 @@ app_ui = ui.page_fluid(
             document.addEventListener('shiny:value', setupFileUpload);
         }
         
+        // Handle progress updates from ExtendedTask
+        if (window.Shiny) {
+            Shiny.addCustomMessageHandler('update_progress', function(message) {
+                const progressOutput = document.querySelector('[id^=\"progress_indicator\"]');
+                if (!progressOutput) {
+                    return;
+                }
+                
+                if (message.stage === 'complete' || message.stage === 'error' || message.stage === 'idle') {
+                    progressOutput.style.display = 'none';
+                    progressOutput.innerHTML = '';
+                    return;
+                }
+                
+                progressOutput.style.display = 'block';
+                progressOutput.innerHTML = `
+                    <div class="mb-6">
+                        <div class="flex items-center text-green-600">
+                            <span class="animate-spin">⏳</span>
+                            <span class="ml-2">${message.message}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
     """),
     nav_bar(),
     ui.div(
@@ -521,10 +546,66 @@ def server(input, output, session):
             class_="mb-6"
         )
     
+    # Extended task for analysis pipeline - captures session for custom messages
+    def create_analyze_task(session):
+        async def update_progress(stage: str, message: str):
+            analysis_stage.set(stage)
+            await session.send_custom_message(
+                "update_progress",
+                {"stage": stage, "message": message},
+            )
+        
+        @reactive.extended_task
+        async def analyze_task(file_info, location, context):
+            try:
+                error_message.set(None)
+                show_results.set(False)
+                analysis_result.set(None)
+                vision_result.set(None)
+                
+                # Stage 1: Vision Analysis
+                await update_progress(STAGE_ANALYZING_VISION, "Analyzing image...")
+                image_base64 = convert_image_to_base64(file_info[0])
+                vision_res = await analyze_vision(image_base64)
+                vision_result.set(vision_res)
+                
+                # Stage 2: Query RAG
+                await update_progress(STAGE_QUERYING_RAG, "Querying local regulations...")
+                await asyncio.sleep(0.05)
+                
+                # Stage 3: Recyclability Analysis
+                await update_progress(
+                    STAGE_ANALYZING_RECYCLABILITY,
+                    "Determining recyclability and searching for facilities..."
+                )
+                analysis_res = await analyze_recyclability(vision_res, location, context)
+                analysis_result.set(analysis_res)
+                
+                # Stage 4: Geocoding
+                await update_progress(STAGE_GEOCODING, "Finding recycling locations...")
+                await asyncio.sleep(0.2)
+                
+                show_results.set(True)
+                await update_progress(STAGE_COMPLETE, "")
+            except Exception as e:
+                await update_progress(STAGE_ERROR, "")
+                error_msg = str(e)
+                if "timeout" in error_msg.lower() or "connection timeout" in error_msg.lower():
+                    error_message.set("Request timed out. The analysis is taking longer than expected. Please try again.")
+                else:
+                    error_message.set(f"Analysis failed: {error_msg}")
+                print(f"Analysis error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return analyze_task
+    
+    analyze_task = create_analyze_task(session)
+    
     @reactive.effect
     @reactive.event(input.check_button)
-    async def run_analysis():
-        """Run the analysis pipeline with progressive UI updates."""
+    def handle_button_click():
+        """Validate user inputs then invoke the analysis task."""
         file_info = input.image()
         location_value = (input.location() or "").strip()
         context_value = input.context() or ""
@@ -541,50 +622,8 @@ def server(input, output, session):
             analysis_stage.set(STAGE_IDLE)
             return
         
-        try:
-            error_message.set(None)
-            analysis_result.set(None)
-            vision_result.set(None)
-            
-            # Stage 1: Vision Analysis
-            analysis_stage.set(STAGE_ANALYZING_VISION)
-            await reactive.flush()
-            await asyncio.sleep(0)
-            
-            image_base64 = convert_image_to_base64(file_info[0])
-            vision_res = await analyze_vision(image_base64)
-            vision_result.set(vision_res)
-            
-            # Stage 2: Query RAG / prepare data
-            analysis_stage.set(STAGE_QUERYING_RAG)
-            await reactive.flush()
-            await asyncio.sleep(0)
-            
-            # Stage 3: Recyclability Analysis
-            analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
-            await reactive.flush()
-            analysis_res = await analyze_recyclability(vision_res, location_value, context_value)
-            analysis_result.set(analysis_res)
-            
-            # Stage 4: Geocoding
-            analysis_stage.set(STAGE_GEOCODING)
-            await reactive.flush()
-            await asyncio.sleep(0.05)
-            
-            show_results.set(True)
-            analysis_stage.set(STAGE_COMPLETE)
-            await reactive.flush()
-        except Exception as e:
-            analysis_stage.set(STAGE_ERROR)
-            await reactive.flush()
-            error_msg = str(e)
-            if "timeout" in error_msg.lower() or "connection timeout" in error_msg.lower():
-                error_message.set("Request timed out. The analysis is taking longer than expected. Please try again.")
-            else:
-                error_message.set(f"Analysis failed: {error_msg}")
-            print(f"Analysis error: {e}")
-            import traceback
-            traceback.print_exc()
+        error_message.set(None)
+        analyze_task.invoke(file_info, location_value, context_value)
     
     @output
     @render.ui
