@@ -72,8 +72,9 @@ The application consists of two services:
 
 1. In the same Railway project, click "New Service" again
 2. Select "GitHub Repo" and choose the same repository
-3. **Important**: Set the root directory to `/rag_service`
-   - Click on the service → Settings → Root Directory → Set to `rag_service`
+3. **Important**: Leave the root directory as `/` (root of repository)
+   - The RAG service needs access to both `rag_service/` and `rag/` directories
+   - Do NOT set a custom root directory for this service
 4. Railway should auto-detect it as a Python service
 
 **Configure Environment Variables:**
