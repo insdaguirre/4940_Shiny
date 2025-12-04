@@ -33,7 +33,8 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
     try:
         storage_context = StorageContext.from_defaults(persist_dir=str(RAG_INDEX_PATH))
         index = load_index_from_storage(storage_context)
-        _query_engine = index.as_query_engine(similarity_top_k=3)
+        # Increase similarity_top_k to retrieve more relevant chunks
+        _query_engine = index.as_query_engine(similarity_top_k=5)
         return _query_engine
     except Exception as e:
         raise RuntimeError(f"Failed to load RAG index: {str(e)}")
@@ -62,6 +63,67 @@ def extract_county_from_location(location: str) -> Optional[str]:
     return None
 
 
+def normalize_and_expand_material(material: str) -> list[str]:
+    """
+    Normalize and expand material names to improve RAG retrieval.
+    
+    Maps brand names, singular forms, and specific types to the terminology
+    used in the RAG knowledge base.
+    
+    Args:
+        material: Material name from vision service (e.g., "Battery", "Tupperware")
+        
+    Returns:
+        List of material terms to search for (original + normalized/expanded terms)
+    """
+    material_lower = material.lower().strip()
+    terms = [material]  # Always include original term
+    
+    # Battery normalization - map singular and specific types to "Batteries"
+    if "battery" in material_lower:
+        if "batteries" not in material_lower:
+            terms.append("Batteries")
+        # Also include specific battery types that might be in docs
+        if "lithium" in material_lower:
+            terms.extend(["Lithium batteries", "Batteries"])
+        elif "alkaline" in material_lower:
+            terms.extend(["Alkaline batteries", "Batteries"])
+        elif "lead" in material_lower or "acid" in material_lower:
+            terms.extend(["Car Batteries", "Lead acid batteries", "Batteries"])
+        else:
+            terms.append("Batteries")
+    
+    # Plastic container normalization - map brand names and generic terms
+    plastic_indicators = [
+        "tupperware", "rubbermaid", "gladware", "ziploc container",
+        "plastic container", "plastic food container", "food storage container"
+    ]
+    
+    if any(indicator in material_lower for indicator in plastic_indicators):
+        terms.extend([
+            "Plastic Containers",
+            "plastic containers",
+            "Plastic containers #1",
+            "Plastic containers #2",
+            "Plastic containers #5"
+        ])
+    
+    # Generic plastic normalization
+    if "plastic" in material_lower and "container" not in material_lower:
+        terms.append("Plastic Containers")
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_terms = []
+    for term in terms:
+        term_lower = term.lower()
+        if term_lower not in seen:
+            seen.add(term_lower)
+            unique_terms.append(term)
+    
+    return unique_terms
+
+
 def query_rag(
     material: str,
     location: str,
@@ -87,10 +149,19 @@ def query_rag(
         # Extract county from location if possible
         county = extract_county_from_location(location)
         
-        # Build query
+        # Normalize and expand material terms for better retrieval
+        material_terms = normalize_and_expand_material(material)
+        
+        # Build query with expanded material terms
         query_parts = [
             f"What are the recycling regulations for {material} in {location}?",
         ]
+        
+        # Add alternative material terms to improve retrieval
+        if len(material_terms) > 1:
+            alternative_terms = [t for t in material_terms[1:] if t.lower() != material.lower()]
+            if alternative_terms:
+                query_parts.append(f"\nAlso search for: {', '.join(alternative_terms[:3])}")
         
         if condition:
             query_parts.append(f"Item condition: {condition}")
@@ -113,8 +184,8 @@ def query_rag(
         query = "\n".join(query_parts)
         
         # Log the query being executed
-        print(f"RAG Query: material={material}, location={location}, county={county}")
-        print(f"RAG Query text: {query[:200]}...")  # Log first 200 chars
+        print(f"RAG Query: material={material}, expanded_terms={material_terms}, location={location}, county={county}")
+        print(f"RAG Query text: {query[:300]}...")  # Log first 300 chars
         
         # Execute query
         response = query_engine.query(query)
