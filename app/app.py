@@ -496,10 +496,9 @@ def server(input, output, session):
     def progress_indicator():
         """Display progress indicator while analysis is in progress."""
         stage = analysis_stage.get()
-        is_running = analyze_task.running()
         
-        # Show indicator if task is running or stage is active
-        if not is_running and (stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR):
+        # Hide when idle, complete, or error
+        if stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR:
             return ui.div(style="display: none;")
         
         # Map stages to user-friendly messages
