@@ -683,6 +683,7 @@ def server(input, output, session):
             
             summary = ui.tags.summary(
                 ui.span(title, class_="text-xs font-medium text-gray-500"),
+                ui.span("Click to expand ⌄", class_="text-[11px] text-gray-400 ml-2"),
                 class_="flex items-center justify-between cursor-pointer select-none"
             )
             
