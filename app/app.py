@@ -496,10 +496,10 @@ def server(input, output, session):
     def progress_indicator():
         """Display progress indicator while analysis is in progress."""
         stage = analysis_stage.get()
+        is_running = analyze_task.running()
         
-        # Always return a UI element (even if empty) to maintain DOM structure
-        # Hide when idle, complete, or error
-        if stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR:
+        # Show indicator if task is running or stage is active
+        if not is_running and (stage == STAGE_IDLE or stage == STAGE_COMPLETE or stage == STAGE_ERROR):
             return ui.div(style="display: none;")
         
         # Map stages to user-friendly messages
@@ -521,56 +521,33 @@ def server(input, output, session):
             class_="mb-6"
         )
     
-    @reactive.effect
-    @reactive.event(input.check_button)
-    async def analyze_item():
-        """Handle item analysis with staged progress."""
-        # Reset state (but don't set to IDLE yet - let validation happen first)
-        error_message.set(None)
-        show_results.set(False)
-        analysis_result.set(None)
-        vision_result.set(None)
-        # Don't set to IDLE here - it will hide the indicator before we can show it
-        
-        # Validation FIRST - don't set analyzing stage until validation passes
-        file_info = input.image()
-        location = input.location()
-        
-        if file_info is None or len(file_info) == 0:
-            error_message.set("Please upload an image")
-            analysis_stage.set(STAGE_IDLE)  # Only set to IDLE on error
-            return
-        
-        if not location or not location.strip():
-            error_message.set("Please enter your location")
-            analysis_stage.set(STAGE_IDLE)  # Only set to IDLE on error
-            return
-        
-        # Only set analyzing stage AFTER validation passes
-        analysis_stage.set(STAGE_ANALYZING_VISION)
-        # CRITICAL: Use a small delay to ensure Shiny processes reactive updates
-        await asyncio.sleep(0.01)
-        
+    # Extended task for long-running analysis with progressive UI updates
+    @reactive.extended_task
+    async def analyze_task(file_info, location, context):
+        """Perform analysis with staged progress updates."""
         try:
-            # Stage 1: Analyze image (Vision API)
+            # Reset state
+            error_message.set(None)
+            show_results.set(False)
+            analysis_result.set(None)
+            vision_result.set(None)
+            
+            # Stage 1: Vision Analysis
+            analysis_stage.set(STAGE_ANALYZING_VISION)
             image_base64 = convert_image_to_base64(file_info[0])
             vision_res = await analyze_vision(image_base64)
             vision_result.set(vision_res)
             
-            # Stage 2: Query RAG (happens inside recyclability, but we indicate it)
-            # Note: RAG query happens inside the recyclability endpoint, but we show this stage
-            # to give users feedback that local regulations are being queried
+            # Stage 2: Query RAG
             analysis_stage.set(STAGE_QUERYING_RAG)
             await asyncio.sleep(0.1)
             
-            # Stage 3: Analyze recyclability (includes RAG query and web search)
+            # Stage 3: Recyclability Analysis
             analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
-            await asyncio.sleep(0.01)  # Yield to allow UI update
-            context = input.context() or ""
             analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
             analysis_result.set(analysis_res)
             
-            # Stage 4: Geocoding (happens in frontend)
+            # Stage 4: Geocoding
             analysis_stage.set(STAGE_GEOCODING)
             await asyncio.sleep(0.5)
             
@@ -588,6 +565,30 @@ def server(input, output, session):
             print(f"Analysis error: {e}")
             import traceback
             traceback.print_exc()
+    
+    @reactive.effect
+    @reactive.event(input.check_button)
+    def handle_button_click():
+        """Handle button click and validate inputs before invoking analysis task."""
+        # Validation
+        file_info = input.image()
+        location = input.location()
+        
+        if file_info is None or len(file_info) == 0:
+            error_message.set("Please upload an image")
+            analysis_stage.set(STAGE_IDLE)
+            return
+        
+        if not location or not location.strip():
+            error_message.set("Please enter your location")
+            analysis_stage.set(STAGE_IDLE)
+            return
+        
+        # Clear any previous errors
+        error_message.set(None)
+        
+        # Invoke the extended task
+        analyze_task.invoke(file_info, location, input.context() or "")
     
     @output
     @render.ui
