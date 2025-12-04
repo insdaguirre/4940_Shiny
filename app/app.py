@@ -533,22 +533,24 @@ def server(input, output, session):
             
             # Stage 1: Vision Analysis
             analysis_stage.set(STAGE_ANALYZING_VISION)
+            await asyncio.sleep(0.05)  # Allow UI to update
             image_base64 = convert_image_to_base64(file_info[0])
             vision_res = await analyze_vision(image_base64)
             vision_result.set(vision_res)
             
             # Stage 2: Query RAG
             analysis_stage.set(STAGE_QUERYING_RAG)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)  # Allow UI to update
             
             # Stage 3: Recyclability Analysis
             analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
+            await asyncio.sleep(0.05)  # Allow UI to update
             analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
             analysis_result.set(analysis_res)
             
             # Stage 4: Geocoding
             analysis_stage.set(STAGE_GEOCODING)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.5)  # Allow UI to update
             
             # Complete
             analysis_stage.set(STAGE_COMPLETE)
