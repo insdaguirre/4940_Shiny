@@ -687,8 +687,22 @@ def server(input, output, session):
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if instruction_items else None,
             # RAG Sources
+            # RAG Sources (collapsible)
             ui.div(
-                ui.p("SOURCES (RAG - Local Regulations)", class_="text-xs font-medium text-gray-500 mb-3"),
+                ui.div(
+                    ui.p(
+                        "SOURCES (RAG - Local Regulations)",
+                        class_="text-xs font-medium text-gray-500"
+                    ),
+                    ui.span("▼", id="rag-sources-chevron", class_="text-xs text-gray-400"),
+                    class_="flex items-center justify-between cursor-pointer",
+                    onclick=(
+                        "const body=document.getElementById('rag-sources-body');"
+                        "const chev=document.getElementById('rag-sources-chevron');"
+                        "if(body){body.classList.toggle('hidden');}"
+                        "if(chev){chev.textContent = body && !body.classList.contains('hidden') ? '▲' : '▼';}"
+                    ),
+                ),
                 ui.div(
                     *[
                         ui.div(
@@ -696,19 +710,35 @@ def server(input, output, session):
                                 f"RAG: {source}" if source.startswith("http") else f"RAG: {source}",
                                 href=source if source.startswith("http") else "#",
                                 target="_blank" if source.startswith("http") else None,
-                                class_="text-sm text-blue-600 hover:text-blue-800 underline" if source.startswith("http") else "text-sm text-gray-600",
+                                class_="text-sm text-blue-600 hover:text-blue-800 underline"
+                                if source.startswith("http")
+                                else "text-sm text-gray-600",
                             ),
-                            class_="mb-2"
+                            class_="mb-1"
                         )
                         for source in rag_sources
                     ],
-                    class_="space-y-1"
+                    id="rag-sources-body",
+                    class_="mt-2 space-y-1 hidden"
                 ),
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if rag_sources else None,
-            # Web Search Sources
+            # Web Search Sources (collapsible)
             ui.div(
-                ui.p("SOURCES (Web Search)", class_="text-xs font-medium text-gray-500 mb-3"),
+                ui.div(
+                    ui.p(
+                        "SOURCES (Web Search)",
+                        class_="text-xs font-medium text-gray-500"
+                    ),
+                    ui.span("▼", id="web-sources-chevron", class_="text-xs text-gray-400"),
+                    class_="flex items-center justify-between cursor-pointer",
+                    onclick=(
+                        "const body=document.getElementById('web-sources-body');"
+                        "const chev=document.getElementById('web-sources-chevron');"
+                        "if(body){body.classList.toggle('hidden');}"
+                        "if(chev){chev.textContent = body && !body.classList.contains('hidden') ? '▲' : '▼';}"
+                    ),
+                ),
                 ui.div(
                     *[
                         ui.div(
@@ -716,13 +746,16 @@ def server(input, output, session):
                                 source if source.startswith("http") else source,
                                 href=source if source.startswith("http") else "#",
                                 target="_blank" if source.startswith("http") else None,
-                                class_="text-sm text-blue-600 hover:text-blue-800 underline" if source.startswith("http") else "text-sm text-gray-600",
+                                class_="text-sm text-blue-600 hover:text-blue-800 underline"
+                                if source.startswith("http")
+                                else "text-sm text-gray-600",
                             ),
-                            class_="mb-2"
+                            class_="mb-1"
                         )
                         for source in web_search_sources
                     ],
-                    class_="space-y-1"
+                    id="web-sources-body",
+                    class_="mt-2 space-y-1 hidden"
                 ),
                 # Show "(no information found in RAG)" message if RAG was queried but returned no results
                 ui.div(
@@ -732,7 +765,7 @@ def server(input, output, session):
                     ),
                     class_="mb-2"
                 ) if (rag_queried and not rag_sources and web_search_sources) else None,
-                class_="mb-6 pt-6 border-t border-gray-100"
+                class_="mb-6 pt-6 border-gray-100 border-t"
             ) if web_search_sources else None,
             # Confidence
             ui.div(
