@@ -683,7 +683,7 @@ def server(input, output, session):
             # Instructions
             ui.div(
                 ui.p("INSTRUCTIONS", class_="text-xs font-medium text-gray-500 mb-3"),
-                ui.tags.ol(*instruction_items, class_="list-decimal space-y-2"),
+                ui.tags.ul(*instruction_items, class_="list-none space-y-2"),
                 class_="mb-6 pt-6 border-t border-gray-100"
             ) if instruction_items else None,
             # RAG Sources
