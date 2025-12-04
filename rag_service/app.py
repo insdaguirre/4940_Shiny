@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import os
-from rag_query import query_rag
+from pathlib import Path
+from llama_index.core import Settings
+from rag_query import query_rag, RAG_INDEX_PATH
 
 app = FastAPI(title="RecycLens RAG Service", version="1.0.0")
 
@@ -39,6 +41,27 @@ async def health_check():
         "status": "ok",
         "service": "rag-service",
         "rag_index_path": str(os.path.abspath("../rag/rag_index_morechunked"))
+    }
+
+
+@app.get("/debug")
+async def debug_info():
+    """Debug endpoint to verify RAG service configuration."""
+    openai_key_set = bool(os.getenv("OPENAI_API_KEY"))
+    index_exists = RAG_INDEX_PATH.exists()
+    
+    # Check if embedding model is initialized
+    embedding_model_info = None
+    if hasattr(Settings, 'embed_model') and Settings.embed_model is not None:
+        embedding_model_info = str(type(Settings.embed_model).__name__)
+    
+    return {
+        "status": "ok",
+        "openai_api_key_set": openai_key_set,
+        "rag_index_exists": index_exists,
+        "rag_index_path": str(RAG_INDEX_PATH),
+        "embedding_model": embedding_model_info,
+        "cwd": os.getcwd()
     }
 
 

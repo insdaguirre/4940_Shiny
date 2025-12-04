@@ -2,8 +2,9 @@
 import os
 from pathlib import Path
 from typing import Optional
-from llama_index.core import StorageContext, load_index_from_storage
+from llama_index.core import StorageContext, load_index_from_storage, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.embeddings.openai import OpenAIEmbedding
 import dotenv
 
 dotenv.load_dotenv()
@@ -24,6 +25,17 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
     if _query_engine is not None:
         return _query_engine
     
+    # Initialize OpenAI embedding model
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise ValueError(
+            "OPENAI_API_KEY environment variable is required for RAG service. "
+            "Please set it in your Railway environment variables."
+        )
+    
+    Settings.embed_model = OpenAIEmbedding(api_key=openai_api_key)
+    print(f"✓ Initialized OpenAI embeddings for RAG queries")
+    
     if not RAG_INDEX_PATH.exists():
         raise FileNotFoundError(
             f"RAG index not found at {RAG_INDEX_PATH}. "
@@ -35,6 +47,7 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
         index = load_index_from_storage(storage_context)
         # Increase similarity_top_k to retrieve more relevant chunks
         _query_engine = index.as_query_engine(similarity_top_k=5)
+        print(f"✓ RAG query engine loaded successfully from {RAG_INDEX_PATH}")
         return _query_engine
     except Exception as e:
         raise RuntimeError(f"Failed to load RAG index: {str(e)}")

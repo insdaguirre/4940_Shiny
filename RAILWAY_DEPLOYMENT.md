@@ -79,7 +79,7 @@ The application consists of two services:
 **Configure Environment Variables:**
 - Click on the service → "Variables" tab
 - Add the following:
-  - `OPENAI_API_KEY` = `sk-your-actual-api-key-here` (OPTIONAL - only if needed for embeddings)
+  - `OPENAI_API_KEY` = `sk-your-actual-api-key-here` (REQUIRED - needed for embeddings)
   - `PORT` = (Leave empty - Railway auto-assigns)
 
 **Get RAG Service URL:**
@@ -175,7 +175,7 @@ The frontend needs to know the backend URL. You have two options:
 - `PORT` - Auto-assigned by Railway
 
 ### RAG Service
-- `OPENAI_API_KEY` (optional) - For embeddings if needed by llama-index
+- `OPENAI_API_KEY` (required) - For embeddings (same key as backend)
 - `PORT` - Auto-assigned by Railway
 
 ## Files Created for Deployment
