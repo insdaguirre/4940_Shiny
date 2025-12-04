@@ -48,7 +48,7 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
         storage_context = StorageContext.from_defaults(persist_dir=str(RAG_INDEX_PATH))
         index = load_index_from_storage(storage_context)
         # Increase similarity_top_k to retrieve more relevant chunks
-        _query_engine = index.as_query_engine(similarity_top_k=5)
+        _query_engine = index.as_query_engine(similarity_top_k=10)
         print(f"✓ RAG query engine loaded successfully from {RAG_INDEX_PATH}")
         return _query_engine
     except Exception as e:
@@ -168,30 +168,31 @@ def query_rag(
         material_terms = normalize_and_expand_material(material)
         
         # Helper function to build a query for a specific material term
+        # Simplified query that matches document style for better embedding similarity
         def build_query(material_term: str) -> str:
-            query_parts = [
-                f"What are the recycling regulations for {material_term} in {location}?",
-            ]
-            
-            if condition:
-                query_parts.append(f"Item condition: {condition}")
-            
-            if context:
-                query_parts.append(f"Additional context: {context}")
-            
-            query_parts.extend([
-                "",
-                "Please provide:",
-                "1. Is this item recyclable in this location?",
-                "2. What are the specific requirements (cleaning, preparation)?",
-                "3. Which bin should it go in?",
-                "4. Any special instructions or restrictions?",
-            ])
+            # Build a simple, keyword-rich query that matches how documents are written
+            query_parts = [material_term, "recycling"]
             
             if county:
-                query_parts.append(f"\nFocus on regulations for {county.capitalize()} County, New York.")
+                query_parts.append(county.capitalize())
+                query_parts.append("County")
+            elif "ithaca" in location.lower() or "tompkins" in location.lower():
+                query_parts.append("Tompkins")
+                query_parts.append("County")
+            elif "albany" in location.lower():
+                query_parts.append("Albany")
+                query_parts.append("County")
             
-            return "\n".join(query_parts)
+            # Add location context
+            if "new york" in location.lower() or "ny" in location.lower():
+                query_parts.append("New York")
+            
+            # Add condition/context if relevant
+            if condition and condition.lower() not in ["unknown", "none", ""]:
+                query_parts.append(condition)
+            
+            # Simple, direct query that will match document chunks
+            return " ".join(query_parts)
         
         # Helper function to extract sources from a response
         def extract_sources_from_response(response) -> list[str]:
