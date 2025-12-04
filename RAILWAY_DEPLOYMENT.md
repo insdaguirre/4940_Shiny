@@ -4,9 +4,10 @@ This guide walks you through deploying the RecycLens application on Railway.
 
 ## Architecture
 
-The application consists of two services:
+The application consists of three services:
 1. **Backend Service** (Node.js/TypeScript) - API server
 2. **Frontend Service** (Shiny/Python) - Web application
+3. **RAG Service** (Python/FastAPI) - RAG microservice for local recycling regulations
 
 ## Prerequisites
 
@@ -74,7 +75,7 @@ The application consists of two services:
 2. Select "GitHub Repo" and choose the same repository
 3. **Important**: Set the root directory to `/rag_service`
    - Click on the service → Settings → Root Directory → Set to `rag_service`
-   - The RAG index files are included in the rag_service directory for deployment
+   - The RAG index files are included in the `rag_service/rag_index_morechunked/` directory for deployment
 4. Railway should auto-detect it as a Python service
 
 **Configure Environment Variables:**
@@ -107,7 +108,7 @@ The frontend needs to know the backend URL. You have two options:
 
 ### 6. Deploy and Verify
 
-1. Both services will automatically deploy when you push to GitHub
+1. All three services will automatically deploy when you push to GitHub
 2. Or manually trigger deployment by clicking "Deploy" in each service
 3. Wait for builds to complete (check the "Deployments" tab)
 

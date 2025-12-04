@@ -33,7 +33,8 @@ PORT=8001
 ### 3. Verify Vector Store
 
 Ensure the vector store files exist:
-- `../rag/rag_index_morechunked/` directory with all JSON files
+- For local development: `../rag/rag_index_morechunked/` directory with all JSON files
+- For Railway deployment: `rag_service/rag_index_morechunked/` directory with all JSON files
 - If missing, extract them from the git commit (see main README)
 
 ## Running Locally
@@ -95,7 +96,7 @@ Query RAG for recycling regulations.
 - **FastAPI**: HTTP server framework
 - **LlamaIndex**: Vector store and query engine
 - **Vector Store**: Pre-built index of recycling regulations
-- **Query Engine**: Semantic search with similarity_top_k=3
+- **Query Engine**: Semantic search with similarity_top_k=10 (for query engine) and similarity_top_k=15 (for retriever)
 
 ## Error Handling
 
@@ -111,13 +112,15 @@ See `RAILWAY_DEPLOYMENT.md` in the project root for deployment instructions.
 The service is configured to:
 - Use NIXPACKS builder
 - Start with `uvicorn app:app --host 0.0.0.0 --port $PORT`
-- Access vector store at `../rag/rag_index_morechunked/` (relative to service root)
+- Access vector store at `rag_service/rag_index_morechunked/` (relative to service root for Railway deployment)
+- For local development, the vector store is accessed at `../rag/rag_index_morechunked/` (relative to service root)
 
 ## Troubleshooting
 
 ### Vector store not found
 
-- Verify `rag/rag_index_morechunked/` directory exists in project root
+- For Railway deployment: Verify `rag_service/rag_index_morechunked/` directory exists in the service root
+- For local development: Verify `rag/rag_index_morechunked/` directory exists in project root
 - Check that all 5 JSON files are present:
   - `default__vector_store.json`
   - `docstore.json`

@@ -17,7 +17,7 @@ An AI-powered recycling assistant that helps users identify recyclable items and
 - **Frontend**: Shiny (Python) web framework
 - **Backend**: Node.js + Express + TypeScript
 - **RAG Service**: Python + FastAPI + LlamaIndex for querying local recycling regulations
-- **AI Services**: OpenAI Responses API (GPT-5.1) for image analysis + OpenAI Responses API (GPT-4.1 with web search) for recyclability
+- **AI Services**: OpenAI Chat Completions API (GPT-5) for image analysis + OpenAI Responses API (GPT-4.1 with web search) for recyclability
 - **Maps**: Mapbox GL JS + Mapbox Geocoding API
 
 ## Prerequisites
@@ -123,13 +123,13 @@ The Shiny app will start and display a URL (typically `http://127.0.0.1:8000`). 
 The Shiny frontend communicates with a Node.js backend API that handles AI processing:
 
 1. **User Input**: User uploads an image, enters location, and optionally adds context via the Shiny UI
-2. **Image Analysis**: Backend calls GPT-5.1 Responses API to analyze the image and identify:
+2. **Image Analysis**: Backend calls GPT-5 Chat Completions API to analyze the image and identify:
    - Primary and secondary materials
    - Item condition (clean, soiled, damaged, etc.)
    - Contaminants (food residue, grease, etc.)
    - Material category
 3. **RAG Query** (if RAG service is available): Backend queries RAG service for local recycling regulations:
-   - Searches vector store for location-specific regulations
+   - Searches vector store for location-specific regulations using similarity search (top_k=15)
    - Retrieves official recycling guidelines for the material and location
    - Returns relevant regulations to enhance the analysis
 4. **Recyclability Assessment**: Backend calls GPT-4.1 Responses API with RAG context and web search to:
@@ -147,9 +147,10 @@ The Shiny frontend communicates with a Node.js backend API that handles AI proce
 
 The app provides real-time feedback during analysis:
 
-- **Stage 1**: "Identifying what's in the image..." - Vision API call
-- **Stage 2**: "Determining if it can be recycled..." - Recyclability API call
-- **Stage 3**: "Finding places to recycle..." - Geocoding and map rendering
+- **Stage 1**: "Analyzing image..." - Vision API call (GPT-5)
+- **Stage 2**: "Querying local regulations..." - RAG service query (if available)
+- **Stage 3**: "Determining recyclability and searching for facilities..." - Recyclability API call (GPT-4.1 with web search)
+- **Stage 4**: "Finding recycling locations..." - Geocoding and map rendering
 
 ## Project Structure
 
@@ -287,7 +288,7 @@ Determines recyclability and finds facilities.
 - Ensure the RAG service is running on port 8001
 - Check that `RAG_SERVICE_URL` in backend `.env` matches the RAG service URL
 - Verify the RAG service is accessible: `curl http://localhost:8001/health`
-- Check that `rag/rag_index_morechunked/` directory exists with all vector store files
+- Check that `rag_service/rag_index_morechunked/` directory exists with all vector store files (for Railway deployment) or `rag/rag_index_morechunked/` (for local development)
 - Review RAG service logs for errors
 
 ### Map not displaying

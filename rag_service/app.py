@@ -40,7 +40,7 @@ async def health_check():
     return {
         "status": "ok",
         "service": "rag-service",
-        "rag_index_path": str(os.path.abspath("../rag/rag_index_morechunked"))
+        "rag_index_path": str(RAG_INDEX_PATH)
     }
 
 

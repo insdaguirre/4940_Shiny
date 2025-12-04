@@ -73,7 +73,7 @@ The Shiny app will start and display a URL (typically `http://127.0.0.1:8000`). 
 
 The Shiny app calls the existing Node.js backend API endpoints:
 
-1. **POST /api/analyze/vision**: Analyzes the uploaded image using GPT-5.1 Responses API
+1. **POST /api/analyze/vision**: Analyzes the uploaded image using GPT-5 Chat Completions API
 2. **POST /api/analyze/recyclability**: Determines recyclability and finds facilities using GPT-4.1 Responses API with web search
 
 ### Process Flow
@@ -93,9 +93,10 @@ The Shiny app calls the existing Node.js backend API endpoints:
 
 The app provides real-time feedback during analysis:
 
-- **Stage 1**: "Analyzing image..." - Vision API call
-- **Stage 2**: "Checking recyclability..." - Recyclability API call
-- **Stage 3**: "Finding facilities..." - Geocoding and map rendering
+- **Stage 1**: "Analyzing image..." - Vision API call (GPT-5)
+- **Stage 2**: "Querying local regulations..." - RAG service query (if available)
+- **Stage 3**: "Determining recyclability and searching for facilities..." - Recyclability API call (GPT-4.1 with web search)
+- **Stage 4**: "Finding recycling locations..." - Geocoding and map rendering
 
 ## File Structure
 
