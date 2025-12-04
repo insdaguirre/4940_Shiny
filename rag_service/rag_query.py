@@ -5,6 +5,7 @@ from typing import Optional
 from llama_index.core import StorageContext, load_index_from_storage, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.llms.openai import OpenAI
 import dotenv
 
 dotenv.load_dotenv()
@@ -25,7 +26,7 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
     if _query_engine is not None:
         return _query_engine
     
-    # Initialize OpenAI embedding model
+    # Initialize OpenAI embedding model and LLM
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         raise ValueError(
@@ -34,7 +35,8 @@ def get_rag_query_engine() -> RetrieverQueryEngine:
         )
     
     Settings.embed_model = OpenAIEmbedding(api_key=openai_api_key)
-    print(f"✓ Initialized OpenAI embeddings for RAG queries")
+    Settings.llm = OpenAI(api_key=openai_api_key, model="gpt-3.5-turbo")
+    print(f"✓ Initialized OpenAI embeddings and LLM for RAG queries")
     
     if not RAG_INDEX_PATH.exists():
         raise FileNotFoundError(
