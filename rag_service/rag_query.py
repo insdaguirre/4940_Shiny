@@ -152,60 +152,100 @@ def query_rag(
         # Normalize and expand material terms for better retrieval
         material_terms = normalize_and_expand_material(material)
         
-        # Build query with expanded material terms
-        query_parts = [
-            f"What are the recycling regulations for {material} in {location}?",
-        ]
+        # Helper function to build a query for a specific material term
+        def build_query(material_term: str) -> str:
+            query_parts = [
+                f"What are the recycling regulations for {material_term} in {location}?",
+            ]
+            
+            if condition:
+                query_parts.append(f"Item condition: {condition}")
+            
+            if context:
+                query_parts.append(f"Additional context: {context}")
+            
+            query_parts.extend([
+                "",
+                "Please provide:",
+                "1. Is this item recyclable in this location?",
+                "2. What are the specific requirements (cleaning, preparation)?",
+                "3. Which bin should it go in?",
+                "4. Any special instructions or restrictions?",
+            ])
+            
+            if county:
+                query_parts.append(f"\nFocus on regulations for {county.capitalize()} County, New York.")
+            
+            return "\n".join(query_parts)
         
-        # Add alternative material terms to improve retrieval
-        if len(material_terms) > 1:
-            alternative_terms = [t for t in material_terms[1:] if t.lower() != material.lower()]
-            if alternative_terms:
-                query_parts.append(f"\nAlso search for: {', '.join(alternative_terms[:3])}")
+        # Helper function to extract sources from a response
+        def extract_sources_from_response(response) -> list[str]:
+            sources = []
+            if hasattr(response, 'source_nodes'):
+                for node in response.source_nodes:
+                    if hasattr(node, 'node') and hasattr(node.node, 'metadata'):
+                        metadata = node.node.metadata
+                        if 'source_url' in metadata:
+                            sources.append(metadata['source_url'])
+                        elif 'source_file' in metadata:
+                            sources.append(metadata['source_file'])
+            return sources
         
-        if condition:
-            query_parts.append(f"Item condition: {condition}")
+        # Try primary query with original material
+        primary_query = build_query(material)
+        print(f"RAG Query (primary): material={material}, expanded_terms={material_terms}, location={location}, county={county}")
+        print(f"RAG Query text: {primary_query[:300]}...")  # Log first 300 chars
         
-        if context:
-            query_parts.append(f"Additional context: {context}")
-        
-        query_parts.extend([
-            "",
-            "Please provide:",
-            "1. Is this item recyclable in this location?",
-            "2. What are the specific requirements (cleaning, preparation)?",
-            "3. Which bin should it go in?",
-            "4. Any special instructions or restrictions?",
-        ])
-        
-        if county:
-            query_parts.append(f"\nFocus on regulations for {county.capitalize()} County, New York.")
-        
-        query = "\n".join(query_parts)
-        
-        # Log the query being executed
-        print(f"RAG Query: material={material}, expanded_terms={material_terms}, location={location}, county={county}")
-        print(f"RAG Query text: {query[:300]}...")  # Log first 300 chars
-        
-        # Execute query
-        response = query_engine.query(query)
+        response = query_engine.query(primary_query)
         response_text = str(response)
+        sources = extract_sources_from_response(response)
         
-        # Extract sources from response metadata if available
-        sources = []
-        if hasattr(response, 'source_nodes'):
-            for node in response.source_nodes:
-                if hasattr(node, 'node') and hasattr(node.node, 'metadata'):
-                    metadata = node.node.metadata
-                    if 'source_url' in metadata:
-                        sources.append(metadata['source_url'])
-                    elif 'source_file' in metadata:
-                        sources.append(metadata['source_file'])
+        # Check if primary query was successful
+        # Consider it successful if we have substantial text (>50 chars) OR sources
+        primary_successful = (response_text and len(response_text.strip()) > 50) or len(sources) > 0
         
-        # Log what was returned
-        print(f"RAG Response: regulations_length={len(response_text)}, sources_count={len(sources)}")
+        # If primary query didn't return good results, try alternative terms
+        if not primary_successful and len(material_terms) > 1:
+            print(f"Primary query returned insufficient results (text_len={len(response_text)}, sources={len(sources)}), trying alternative terms...")
+            
+            # Try each alternative term (skip the first one as it's the original)
+            for alt_term in material_terms[1:]:
+                if alt_term.lower() == material.lower():
+                    continue  # Skip if it's the same as original
+                
+                try:
+                    alt_query = build_query(alt_term)
+                    print(f"RAG Query (alternative): trying material={alt_term}")
+                    
+                    alt_response = query_engine.query(alt_query)
+                    alt_text = str(alt_response)
+                    alt_sources = extract_sources_from_response(alt_response)
+                    
+                    # If this alternative query gives better results, use it
+                    alt_successful = (alt_text and len(alt_text.strip()) > 50) or len(alt_sources) > 0
+                    
+                    if alt_successful:
+                        # Use the alternative result if it's better
+                        if len(alt_text.strip()) > len(response_text.strip()) or len(alt_sources) > len(sources):
+                            response_text = alt_text
+                            sources = alt_sources
+                            print(f"Alternative query with '{alt_term}' returned better results")
+                            # If we got good results, we can stop trying more alternatives
+                            if len(alt_text.strip()) > 100 and len(alt_sources) > 0:
+                                break
+                    else:
+                        print(f"Alternative query with '{alt_term}' also returned insufficient results")
+                        
+                except Exception as e:
+                    print(f"Error querying with alternative term '{alt_term}': {e}")
+                    continue
+        
+        # Log final results
+        print(f"RAG Response (final): regulations_length={len(response_text)}, sources_count={len(sources)}")
         if sources:
             print(f"RAG Sources: {sources}")
+        else:
+            print("RAG Response: No sources found")
         
         return response_text, sources
         
