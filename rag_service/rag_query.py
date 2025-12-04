@@ -248,8 +248,8 @@ def query_rag(
             sources = extract_sources_from_nodes(response.source_nodes)
         
         # Check if primary query was successful
-        # Consider it successful if we have substantial text (>50 chars) OR sources
-        primary_successful = (response_text and len(response_text.strip()) > 50) or len(sources) > 0
+        # Consider it successful if we have any non-empty text OR sources
+        primary_successful = bool(response_text and response_text.strip()) or len(sources) > 0
         
         # If LLM synthesis returned empty but we have sources, use retriever to get raw chunks
         if not primary_successful and len(sources) == 0:
@@ -264,13 +264,13 @@ def query_rag(
                     raw_text = extract_text_from_nodes(retrieved_nodes)
                     raw_sources = extract_sources_from_nodes(retrieved_nodes)
                     
-                    if raw_text and len(raw_text.strip()) > 50:
+                    if raw_text and raw_text.strip():
                         response_text = raw_text
                         sources = raw_sources
                         primary_successful = True
                         print(f"Using raw retrieved chunks (text_len={len(raw_text)}, sources={len(sources)})")
                     else:
-                        print(f"Retrieved chunks but text too short (text_len={len(raw_text)})")
+                        print(f"Retrieved chunks but empty text (text_len={len(raw_text)})")
                 else:
                     print("No chunks retrieved from vector store")
             except Exception as e:
@@ -299,7 +299,7 @@ def query_rag(
                         alt_sources = extract_sources_from_nodes(alt_response.source_nodes)
                     
                     # If LLM synthesis failed, try direct retrieval
-                    alt_successful = (alt_text and len(alt_text.strip()) > 50) or len(alt_sources) > 0
+                    alt_successful = bool(alt_text and alt_text.strip()) or len(alt_sources) > 0
                     
                     if not alt_successful:
                         print(f"LLM synthesis failed for '{alt_term}', trying direct retrieval...")
@@ -311,7 +311,7 @@ def query_rag(
                                 raw_text = extract_text_from_nodes(retrieved_nodes)
                                 raw_sources = extract_sources_from_nodes(retrieved_nodes)
                                 
-                                if raw_text and len(raw_text.strip()) > 50:
+                                if raw_text and raw_text.strip():
                                     alt_text = raw_text
                                     alt_sources = raw_sources
                                     alt_successful = True
