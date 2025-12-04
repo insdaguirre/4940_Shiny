@@ -375,6 +375,28 @@ app_ui = ui.page_fluid(
             document.addEventListener('shiny:connected', setupFileUpload);
             document.addEventListener('shiny:value', setupFileUpload);
         }
+        
+        // Handle progress updates from ExtendedTask
+        if (window.Shiny) {
+            Shiny.addCustomMessageHandler('update_progress', function(message) {
+                const progressOutput = document.querySelector('[id*="progress_indicator"]');
+                if (progressOutput) {
+                    if (message.stage === 'complete' || message.stage === 'error' || message.stage === 'idle') {
+                        progressOutput.style.display = 'none';
+                    } else {
+                        progressOutput.innerHTML = `
+                            <div class="mb-6">
+                                <div class="flex items-center text-green-600">
+                                    <span class="animate-spin">⏳</span>
+                                    <span class="ml-2">${message.message}</span>
+                                </div>
+                            </div>
+                        `;
+                        progressOutput.style.display = 'block';
+                    }
+                }
+            });
+        }
     """),
     nav_bar(),
     ui.div(
@@ -521,51 +543,62 @@ def server(input, output, session):
         )
     
     # Extended task for long-running analysis with progressive UI updates
-    @reactive.extended_task
-    async def analyze_task(file_info, location, context):
-        """Perform analysis with staged progress updates."""
-        try:
-            # Reset state
-            error_message.set(None)
-            show_results.set(False)
-            analysis_result.set(None)
-            vision_result.set(None)
-            
-            # Stage 1: Vision Analysis
-            analysis_stage.set(STAGE_ANALYZING_VISION)
-            await asyncio.sleep(0.05)  # Allow UI to update
-            image_base64 = convert_image_to_base64(file_info[0])
-            vision_res = await analyze_vision(image_base64)
-            vision_result.set(vision_res)
-            
-            # Stage 2: Query RAG
-            analysis_stage.set(STAGE_QUERYING_RAG)
-            await asyncio.sleep(0.1)  # Allow UI to update
-            
-            # Stage 3: Recyclability Analysis
-            analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
-            await asyncio.sleep(0.05)  # Allow UI to update
-            analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
-            analysis_result.set(analysis_res)
-            
-            # Stage 4: Geocoding
-            analysis_stage.set(STAGE_GEOCODING)
-            await asyncio.sleep(0.5)  # Allow UI to update
-            
-            # Complete
-            analysis_stage.set(STAGE_COMPLETE)
-            show_results.set(True)
-        except Exception as e:
-            analysis_stage.set(STAGE_ERROR)
-            # Provide more user-friendly error messages
-            error_msg = str(e)
-            if "timeout" in error_msg.lower() or "Connection timeout" in error_msg:
-                error_message.set(f"Request timed out. The analysis is taking longer than expected. Please try again.")
-            else:
-                error_message.set(f"Analysis failed: {error_msg}")
-            print(f"Analysis error: {e}")
-            import traceback
-            traceback.print_exc()
+    # Use closure to capture session
+    def create_analyze_task(session):
+        @reactive.extended_task
+        async def analyze_task(file_info, location, context):
+            """Perform analysis with staged progress updates."""
+            try:
+                # Reset state
+                error_message.set(None)
+                show_results.set(False)
+                analysis_result.set(None)
+                vision_result.set(None)
+                
+                # Stage 1: Vision Analysis
+                analysis_stage.set(STAGE_ANALYZING_VISION)
+                session.send_custom_message("update_progress", {"stage": STAGE_ANALYZING_VISION, "message": "Analyzing image..."})
+                image_base64 = convert_image_to_base64(file_info[0])
+                vision_res = await analyze_vision(image_base64)
+                vision_result.set(vision_res)
+                
+                # Stage 2: Query RAG
+                analysis_stage.set(STAGE_QUERYING_RAG)
+                session.send_custom_message("update_progress", {"stage": STAGE_QUERYING_RAG, "message": "Querying local regulations..."})
+                await asyncio.sleep(0.1)
+                
+                # Stage 3: Recyclability Analysis
+                analysis_stage.set(STAGE_ANALYZING_RECYCLABILITY)
+                session.send_custom_message("update_progress", {"stage": STAGE_ANALYZING_RECYCLABILITY, "message": "Determining recyclability and searching for facilities..."})
+                analysis_res = await analyze_recyclability(vision_res, location.strip(), context)
+                analysis_result.set(analysis_res)
+                
+                # Stage 4: Geocoding
+                analysis_stage.set(STAGE_GEOCODING)
+                session.send_custom_message("update_progress", {"stage": STAGE_GEOCODING, "message": "Finding recycling locations..."})
+                await asyncio.sleep(0.5)
+                
+                # Complete
+                analysis_stage.set(STAGE_COMPLETE)
+                session.send_custom_message("update_progress", {"stage": STAGE_COMPLETE, "message": ""})
+                show_results.set(True)
+            except Exception as e:
+                analysis_stage.set(STAGE_ERROR)
+                session.send_custom_message("update_progress", {"stage": STAGE_ERROR, "message": ""})
+                # Provide more user-friendly error messages
+                error_msg = str(e)
+                if "timeout" in error_msg.lower() or "Connection timeout" in error_msg:
+                    error_message.set(f"Request timed out. The analysis is taking longer than expected. Please try again.")
+                else:
+                    error_message.set(f"Analysis failed: {error_msg}")
+                print(f"Analysis error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return analyze_task
+    
+    # Create the task with session captured
+    analyze_task = create_analyze_task(session)
     
     @reactive.effect
     @reactive.event(input.check_button)
