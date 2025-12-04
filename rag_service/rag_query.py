@@ -9,10 +9,10 @@ import dotenv
 
 dotenv.load_dotenv()
 
-# Path to the vector store - adjust based on service location
-# In Railway, rag_service is at root, so rag/ is at ../rag/
-# Locally, if running from rag_service/, rag/ is at ../rag/
-RAG_INDEX_PATH = Path(__file__).parent.parent / "rag" / "rag_index_morechunked"
+# Path to the vector store
+# For Railway deployment: Index is copied into rag_service/rag_index_morechunked/
+# For local development: Index is also available at ../rag/rag_index_morechunked/
+RAG_INDEX_PATH = Path(__file__).parent / "rag_index_morechunked"
 
 # Global cache for the query engine
 _query_engine: Optional[RetrieverQueryEngine] = None
